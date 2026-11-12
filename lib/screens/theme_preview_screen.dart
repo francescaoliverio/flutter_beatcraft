@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
+import '../widgets/heading.dart';
 import '../widgets/button.dart';
 
 /// Temporary screen to check theme, font and buttons on a device.
@@ -17,46 +18,47 @@ class ThemePreviewScreen extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.paddingLg),
           children: [
             // Typography
-            Text('Display'.toUpperCase(), style: AppTextStyles.display),
-            Text('Heading 1'.toUpperCase(), style: AppTextStyles.h1),
-            Text('Heading 2'.toUpperCase(), style: AppTextStyles.h2),
-            Text('Heading 3'.toUpperCase(), style: AppTextStyles.h3),
-            Text('Heading 4'.toUpperCase(), style: AppTextStyles.h4),
-            Text('Heading 5'.toUpperCase(), style: AppTextStyles.h5),
+            const Heading('Display', style: HeadingStyle.display),
+            const Heading('Heading 1', style: HeadingStyle.h1),
+            const Heading('Heading 2', style: HeadingStyle.h2),
+            const Heading('Heading 3', style: HeadingStyle.h3),
+            const Heading('Heading 4', style: HeadingStyle.h4),
+            const Heading('Heading 5', style: HeadingStyle.h5),
+            const Heading('Track name', style: HeadingStyle.h3, uppercase: false),
             const SizedBox(height: AppSpacing.paddingMd),
             const Text('P bold: the quick brown fox', style: AppTextStyles.pBold),
             const Text('P regular: the quick brown fox', style: AppTextStyles.p),
             const Text('P light: the quick brown fox', style: AppTextStyles.pLight),
             const Text('P italic: the quick brown fox', style: AppTextStyles.pItalic),
             const Text('P italic light: the quick brown fox', style: AppTextStyles.pItalicLight),
-            const Text('Secondary text in greyLight',style: TextStyle(color: AppColors.greyLight)),
+            const Text('Secondary text in greyLight', style: TextStyle(color: AppColors.greyLight)),
             const SizedBox(height: AppSpacing.paddingLg),
             // Buttons: one row per color
-            for (final color in AppButtonColor.values) ...[
+            for (final color in ButtonColor.values) ...[
               Wrap(
                 spacing: AppSpacing.paddingMd,
                 runSpacing: AppSpacing.paddingMd,
                 children: [
-                  AppButton(
+                  Button(
                     label: 'Filled',
                     icon: Icons.send,
                     color: color,
                     onPressed: () {},
                   ),
-                  AppButton(
+                  Button(
                     label: 'Outline',
                     icon: Icons.save,
                     color: color,
-                    variant: AppButtonVariant.outline,
+                    variant: ButtonVariant.outline,
                     onPressed: () {},
                   ),
-                  AppButton(
+                  Button(
                     icon: Icons.play_arrow,
                     color: color,
-                    variant: AppButtonVariant.outline,
+                    variant: ButtonVariant.outline,
                     onPressed: () {},
                   ),
-                  AppButton(label: 'Disabled', color: color, onPressed: null),
+                  Button(label: 'Disabled', color: color, onPressed: null),
                 ],
               ),
               const SizedBox(height: AppSpacing.paddingMd),

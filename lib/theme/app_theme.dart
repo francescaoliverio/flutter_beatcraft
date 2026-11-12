@@ -47,37 +47,6 @@ class AppTheme {
         bodyColor: AppColors.textLight,
         displayColor: AppColors.textLight,
       ),
-
-      // Filled button: primary background, dark text,
-      // with the pressed and disabled colors.
-      filledButtonTheme: FilledButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.disabled)) {
-              return AppColors.primaryDisabled;
-            }
-            if (states.contains(WidgetState.pressed)) {
-              return AppColors.primaryPressed;
-            }
-            return AppColors.primary;
-          }),
-          foregroundColor: const WidgetStatePropertyAll(AppColors.textDark),
-          textStyle: const WidgetStatePropertyAll(AppTextStyles.pBold),
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(
-              horizontal: AppSpacing.paddingLg,
-              vertical: AppSpacing.paddingMd,
-            ),
-          ),
-          shape: const WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(
-                Radius.circular(AppSpacing.radiusMd),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
