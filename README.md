@@ -70,7 +70,7 @@ When a remix is opened, the app loads the original track from Jamendo into memor
 | Framework | Flutter (Dart) |
 | Platforms | Android, iOS |
 | Audio engine | [flutter_soloud](https://pub.dev/packages/flutter_soloud) |
-| Icons | [phosphor_flutter](https://pub.dev/packages/phosphor_flutter) |
+| Icons | [phosphoricons_flutter](https://pub.dev/packages/phosphoricons_flutter) |
 | Font | Exo |
 | Design | Figma |
 
