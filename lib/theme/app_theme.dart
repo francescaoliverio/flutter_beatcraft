@@ -43,6 +43,26 @@ class AppTheme {
         bodySmall: AppTextStyles.pSm,
         labelLarge: AppTextStyles.pBold,
       ).apply(bodyColor: AppColors.textLight, displayColor: AppColors.textLight),
+
+      // Navigation Bar
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.bgDark,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: Colors.transparent,
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        height: 64,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            size: 24,
+            color: states.contains(WidgetState.selected) ? AppColors.primary : AppColors.greyLight,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => AppTextStyles.pSm.copyWith(
+            color: states.contains(WidgetState.selected) ? AppColors.primary : AppColors.greyLight,
+          ),
+        ),
+      ),
     );
   }
 }
