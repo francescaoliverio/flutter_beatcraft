@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app_colors.dart';
-import 'app_spacing.dart';
 import 'app_text_styles.dart';
 
 /// Puts all the tokens together in one ThemeData.
@@ -43,10 +42,7 @@ class AppTheme {
         bodyMedium: AppTextStyles.p,
         bodySmall: AppTextStyles.pSm,
         labelLarge: AppTextStyles.pBold,
-      ).apply(
-        bodyColor: AppColors.textLight,
-        displayColor: AppColors.textLight,
-      ),
+      ).apply(bodyColor: AppColors.textLight, displayColor: AppColors.textLight),
     );
   }
 }

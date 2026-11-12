@@ -39,12 +39,7 @@ class ThemePreviewScreen extends StatelessWidget {
                 spacing: AppSpacing.paddingMd,
                 runSpacing: AppSpacing.paddingMd,
                 children: [
-                  Button(
-                    label: 'Filled',
-                    icon: Icons.send,
-                    color: color,
-                    onPressed: () {},
-                  ),
+                  Button(label: 'Filled', icon: Icons.send, color: color, onPressed: () {}),
                   Button(
                     label: 'Outline',
                     icon: Icons.save,
@@ -52,12 +47,7 @@ class ThemePreviewScreen extends StatelessWidget {
                     variant: ButtonVariant.outline,
                     onPressed: () {},
                   ),
-                  Button(
-                    icon: Icons.play_arrow,
-                    color: color,
-                    variant: ButtonVariant.outline,
-                    onPressed: () {},
-                  ),
+                  Button(icon: Icons.play_arrow, color: color, variant: ButtonVariant.outline, onPressed: () {}),
                   Button(label: 'Disabled', color: color, onPressed: null),
                 ],
               ),

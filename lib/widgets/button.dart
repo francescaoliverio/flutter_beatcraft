@@ -22,10 +22,7 @@ class Button extends StatefulWidget {
     this.onPressed,
     this.color = ButtonColor.primary,
     this.variant = ButtonVariant.filled,
-  }) : assert(
-          label != null || icon != null,
-          'Button needs a label, an icon, or both',
-        );
+  }) : assert(label != null || icon != null, 'Button needs a label, an icon, or both');
 
   final String? label;
   final IconData? icon;
@@ -115,15 +112,9 @@ class _ButtonState extends State<Button> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.icon != null)
-                Icon(widget.icon, size: 18, color: contentColor),
-              if (widget.icon != null && !iconOnly)
-                const SizedBox(width: AppSpacing.paddingSm),
-              if (!iconOnly)
-                Text(
-                  widget.label!,
-                  style: AppTextStyles.pBold.copyWith(color: contentColor),
-                ),
+              if (widget.icon != null) Icon(widget.icon, size: 18, color: contentColor),
+              if (widget.icon != null && !iconOnly) const SizedBox(width: AppSpacing.paddingSm),
+              if (!iconOnly) Text(widget.label!, style: AppTextStyles.pBold.copyWith(color: contentColor)),
             ],
           ),
         ),
