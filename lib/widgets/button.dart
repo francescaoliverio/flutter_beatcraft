@@ -5,50 +5,39 @@ import '../theme/app_effects.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 
-/// Which brand color the button uses.
-enum AppButtonColor { primary, secondary, tertiary }
+enum ButtonColor { primary, secondary, tertiary }
 
-/// Filled: colored background, dark text.
-/// Outline: transparent background, colored border and text.
-enum AppButtonVariant { filled, outline }
+enum ButtonVariant { filled, outline }
 
-/// Button from the design system.
-///
+/// Button
 /// - With [label]: icon (optional) + text.
 /// - Without [label]: square icon-only button ([icon] required).
 /// - [onPressed] null = disabled, as in Flutter's own buttons.
-///
-/// Examples:
-/// ```dart
-/// AppButton(label: 'Publish', icon: PhosphorIconsRegular.paperPlaneTilt, onPressed: () {})
-/// AppButton(label: 'Save', icon: PhosphorIconsRegular.floppyDisk, variant: AppButtonVariant.outline, onPressed: () {})
-/// AppButton(icon: PhosphorIconsRegular.play, color: AppButtonColor.secondary, onPressed: () {})
-/// AppButton(label: 'Remix not allowed', onPressed: null) // disabled
-/// ```
-class AppButton extends StatefulWidget {
-  const AppButton({
+
+class Button extends StatefulWidget {
+  const Button({
     super.key,
     this.label,
     this.icon,
     this.onPressed,
-    this.color = AppButtonColor.primary,
-    this.variant = AppButtonVariant.filled,
+    this.color = ButtonColor.primary,
+    this.variant = ButtonVariant.filled,
   }) : assert(
           label != null || icon != null,
-          'AppButton needs a label, an icon, or both',
+          'Button needs a label, an icon, or both',
         );
 
   final String? label;
   final IconData? icon;
   final VoidCallback? onPressed;
-  final AppButtonColor color;
-  final AppButtonVariant variant;
+  final ButtonColor color;
+  final ButtonVariant variant;
 
   @override
-  State<AppButton> createState() => _AppButtonState();
+  State<Button> createState() => _ButtonState();
 }
 
-class _AppButtonState extends State<AppButton> {
+class _ButtonState extends State<Button> {
   bool _pressed = false;
 
   bool get _enabled => widget.onPressed != null;
@@ -56,13 +45,13 @@ class _AppButtonState extends State<AppButton> {
   /// Picks the color for the current state: disabled, pressed or default.
   Color get _stateColor {
     switch (widget.color) {
-      case AppButtonColor.primary:
+      case ButtonColor.primary:
         if (!_enabled) return AppColors.primaryDisabled;
         return _pressed ? AppColors.primaryPressed : AppColors.primary;
-      case AppButtonColor.secondary:
+      case ButtonColor.secondary:
         if (!_enabled) return AppColors.secondaryDisabled;
         return _pressed ? AppColors.secondaryPressed : AppColors.secondary;
-      case AppButtonColor.tertiary:
+      case ButtonColor.tertiary:
         if (!_enabled) return AppColors.tertiaryDisabled;
         return _pressed ? AppColors.tertiaryPressed : AppColors.tertiary;
     }
@@ -70,11 +59,11 @@ class _AppButtonState extends State<AppButton> {
 
   List<BoxShadow> get _glow {
     switch (widget.color) {
-      case AppButtonColor.primary:
+      case ButtonColor.primary:
         return AppEffects.glowPrimary;
-      case AppButtonColor.secondary:
+      case ButtonColor.secondary:
         return AppEffects.glowSecondary;
-      case AppButtonColor.tertiary:
+      case ButtonColor.tertiary:
         return AppEffects.glowTertiary;
     }
   }
@@ -85,7 +74,7 @@ class _AppButtonState extends State<AppButton> {
 
   @override
   Widget build(BuildContext context) {
-    final bool filled = widget.variant == AppButtonVariant.filled;
+    final bool filled = widget.variant == ButtonVariant.filled;
     final bool iconOnly = widget.label == null;
     final Color color = _stateColor;
 
