@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Glow shadows
 /// Each glow is two shadows: one towards bottom-right, one towards top-left.
