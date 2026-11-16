@@ -13,10 +13,11 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TODO: show only when a track is playing, with real data
-    return Material(
-      color: AppColors.greyDarker,
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen())),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen())),
+      child: ColoredBox(
+        color: AppColors.greyDarker,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg, vertical: AppSpacing.paddingSm),
           child: Row(
