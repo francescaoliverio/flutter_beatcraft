@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -39,15 +40,20 @@ class ThemePreviewScreen extends StatelessWidget {
                 spacing: AppSpacing.paddingMd,
                 runSpacing: AppSpacing.paddingMd,
                 children: [
-                  Button(label: 'Filled', icon: Icons.send, color: color, onPressed: () {}),
+                  Button(label: 'Filled', icon: PhosphorIconsRegular.paperPlaneTilt, color: color, onPressed: () {}),
                   Button(
                     label: 'Outline',
-                    icon: Icons.save,
+                    icon: PhosphorIconsRegular.floppyDisk,
                     color: color,
                     variant: ButtonVariant.outline,
                     onPressed: () {},
                   ),
-                  Button(icon: Icons.play_arrow, color: color, variant: ButtonVariant.outline, onPressed: () {}),
+                  Button(
+                    icon: PhosphorIconsRegular.play,
+                    color: color,
+                    variant: ButtonVariant.outline,
+                    onPressed: () {},
+                  ),
                   Button(label: 'Disabled', color: color, onPressed: null),
                 ],
               ),
