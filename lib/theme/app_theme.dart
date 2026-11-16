@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'app_colors.dart';
+import 'app_spacing.dart';
 import 'app_text_styles.dart';
 
 /// Puts all the tokens together in one ThemeData.
@@ -61,6 +62,35 @@ class AppTheme {
           (states) => AppTextStyles.pSm.copyWith(
             color: states.contains(WidgetState.selected) ? AppColors.primary : AppColors.greyLight,
           ),
+        ),
+      ),
+
+      // Text fields
+      inputDecorationTheme: InputDecorationThemeData(
+        filled: true,
+        fillColor: AppColors.greyDarker,
+        labelStyle: AppTextStyles.p.copyWith(color: AppColors.greyLight),
+        floatingLabelStyle: AppTextStyles.pSm.copyWith(color: AppColors.primary),
+        contentPadding: const EdgeInsets.all(AppSpacing.paddingMd),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+          borderSide: BorderSide(color: AppColors.primary),
+        ),
+        errorBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+          borderSide: BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+          borderSide: BorderSide(color: AppColors.error, width: 2),
         ),
       ),
     );
