@@ -1,0 +1,22 @@
+{
+  "project": "flutter_beatcraft",
+  "platform": "ios",
+  "github": {
+    "owner": "francescaoliverio",
+    "repo": "flutter_beatcraft"
+  },
+  "provider": "github",
+  "codemagic": {},
+  "bitrise": {},
+  "ios": {
+    "path": "ios",
+    "bundleId": "com.example.flutterBeatcraft"
+  },
+  "flutter": {
+    "version": "3.50.0",
+    "watch": {}
+  },
+  "reactNative": {},
+  "kmp": {},
+  "mobai": {}
+}
