@@ -1,7 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
-import './screens/login_screen.dart';
-import './theme/app_theme.dart';
+import 'screens/login_screen.dart';
+import 'theme/app_theme.dart';
 
 class BeatCraftApp extends StatelessWidget {
   const BeatCraftApp({super.key});

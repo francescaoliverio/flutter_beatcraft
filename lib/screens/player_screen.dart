@@ -6,14 +6,10 @@ import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/button.dart';
 import '../widgets/heading.dart';
-import 'create_screen.dart';
 
 /// Now playing: cover, track info, progress, controls, remix.
 class PlayerScreen extends StatelessWidget {
   const PlayerScreen({super.key});
-
-  // TODO: false when audiodownload_allowed is false or the license is ND
-  final bool _remixAllowed = true;
 
   @override
   Widget build(BuildContext context) {
