@@ -14,7 +14,9 @@ jobs:
       - name: Installa dipendenze
         run: flutter pub get
       - name: Compila BeatCraft in Release
-        run: flutter build ios --release --no-codesign
+        env:
+          JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
+        run: flutter build ios --release --no-codesign --dart-define=JAMENDO_CLIENT_ID=$JAMENDO_CLIENT_ID
       - name: Crea IPA
         run: |
           mkdir -p Payload
