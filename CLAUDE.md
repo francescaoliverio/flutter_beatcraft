@@ -18,6 +18,7 @@ lib/
   theme/      design tokens
   models/     data classes
   services/   API calls, audio engine, local storage
+  providers/  Riverpod providers
   screens/    one file per screen
   widgets/    reusable components
 ```
@@ -47,7 +48,6 @@ lib/
 - Remix allowed only if `audiodownload_allowed` is true and `license_ccurl` is present and not NoDerivatives (`-nd`).
 - Remixes are non-destructive: saved as a project (track id + clips), never as an audio copy of the track.
 - DummyJSON: demo login, token kept in memory only.
-- Random User Generator: fixed seed `717f2111`.
 
 ## Known issues
 

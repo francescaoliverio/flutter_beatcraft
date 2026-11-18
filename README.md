@@ -30,10 +30,10 @@ The Create screen is a timeline editor where you remix a Jamendo track.
 
 ### Online features (external APIs)
 
-- [ ] Login with a demo account (DummyJSON)
+- [x] Login with a demo account (DummyJSON)
 - [ ] Home feed and music player with real Creative Commons tracks (Jamendo)
+- [ ] Trending artists (Jamendo)
 - [ ] Playlists (Jamendo)
-- [ ] Artist and user profiles with generated names and pictures (Random User Generator)
 
 ### Mock (UI only)
 
@@ -69,6 +69,8 @@ When a remix is opened, the app loads the original track from Jamendo into memor
 |---|---|
 | Framework | Flutter (Dart) |
 | Platforms | Android, iOS |
+| State management | [flutter_riverpod](https://pub.dev/packages/flutter_riverpod) |
+| HTTP | [http](https://pub.dev/packages/http) |
 | Audio engine | [flutter_soloud](https://pub.dev/packages/flutter_soloud) |
 | Icons | [phosphoricons_flutter](https://pub.dev/packages/phosphoricons_flutter) |
 | Font | Exo |
@@ -79,7 +81,6 @@ When a remix is opened, the app loads the original track from Jamendo into memor
 | API | Used for | Key required | Limits |
 |---|---|---|---|
 | [Jamendo API v3.0](https://developer.jamendo.com/v3.0/docs) | Tracks, audio streaming, playlists | Yes, free app registration on the [Jamendo developer portal](https://devportal.jamendo.com) | Free for non-commercial use, request limits apply over high threshold|
-| [Random User Generator](https://randomuser.me/documentation) | Artist and user names and pictures | No | No |
 | [DummyJSON](https://dummyjson.com/docs/auth) | Demo authentication | No | No |
 
 ### Jamendo terms
@@ -91,10 +92,6 @@ Jamendo is free for non-commercial use only. As required by the [Jamendo API ter
 - links each track to its page on Jamendo
 
 All tracks are published under Creative Commons licenses. This app is not affiliated with or endorsed by Jamendo.
-
-### Random User Generator
-
-Users are requested with a fixed `seed` parameter, so the same profiles are returned on every launch.
 
 ### DummyJSON
 
@@ -125,6 +122,7 @@ lib/
   theme/             design tokens from Figma: colors, text styles, spacing, effects
   models/            data classes (tracks, clips, remix projects)
   services/          audio engine, API calls and local storage
+  providers/         Riverpod providers: shared state such as the login session
   screens/           one file per screen
   widgets/           reusable UI components
 

@@ -35,7 +35,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.paddingLg),
           const Heading('Trending artists', style: HeadingStyle.h4),
           const SizedBox(height: AppSpacing.paddingMd),
-          // TODO: artists from Random User Generator
+          // TODO: artists from Jamendo
           const SizedBox(height: 100, child: Placeholder(color: AppColors.greyDark)),
           const SizedBox(height: AppSpacing.paddingLg),
           const Heading('Playlists', style: HeadingStyle.h4),
