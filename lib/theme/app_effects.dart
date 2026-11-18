@@ -1,9 +1,16 @@
 import 'package:material_ui/material_ui.dart';
 
-/// Glow shadows
+/// Glow shadows and animation durations.
 /// Each glow is two shadows: one towards bottom-right, one towards top-left.
 class AppEffects {
   AppEffects._();
+
+  // Durations
+  /// Pressed state of buttons.
+  static const Duration durationShort = Duration(milliseconds: 100);
+
+  /// One half of the skeleton pulse.
+  static const Duration durationLong = Duration(milliseconds: 900);
 
   static const List<BoxShadow> glowPrimary = [
     BoxShadow(color: Color.fromRGBO(199, 245, 61, 0.4), offset: Offset(1, 1), blurRadius: 4),

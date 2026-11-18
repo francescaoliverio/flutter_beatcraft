@@ -5,7 +5,8 @@ import '../theme/app_effects.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 
-enum ButtonColor { primary, secondary, tertiary }
+/// [error] has no pressed or disabled color and no glow: use it with the outline variant.
+enum ButtonColor { primary, secondary, tertiary, error }
 
 enum ButtonVariant { filled, outline }
 
@@ -51,6 +52,8 @@ class _ButtonState extends State<Button> {
       case ButtonColor.tertiary:
         if (!_enabled) return AppColors.tertiaryDisabled;
         return _pressed ? AppColors.tertiaryPressed : AppColors.tertiary;
+      case ButtonColor.error:
+        return AppColors.error;
     }
   }
 
@@ -62,6 +65,8 @@ class _ButtonState extends State<Button> {
         return AppEffects.glowSecondary;
       case ButtonColor.tertiary:
         return AppEffects.glowTertiary;
+      case ButtonColor.error:
+        return const [];
     }
   }
 
@@ -97,7 +102,7 @@ class _ButtonState extends State<Button> {
         // it moves between the two values in 100 ms instead of jumping,
         // so the press feels smooth.
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: AppEffects.durationShort,
           padding: EdgeInsets.symmetric(
             horizontal: iconOnly ? AppSpacing.paddingSm : AppSpacing.paddingMd,
             vertical: AppSpacing.paddingSm,

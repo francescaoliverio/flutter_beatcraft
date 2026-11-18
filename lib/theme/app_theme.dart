@@ -65,12 +65,31 @@ class AppTheme {
         ),
       ),
 
+      // Icon buttons: no ripple, pressed color instead
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.pressed) ? AppColors.greyLighter : AppColors.greyLight,
+          ),
+        ),
+      ),
+
+      // Cursor, selected text and selection handles in text fields.
+      // 0.4 alpha on the selection is the same as Flutter's default.
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: AppColors.secondary,
+        selectionColor: AppColors.secondary.withValues(alpha: 0.4),
+        selectionHandleColor: AppColors.secondary,
+      ),
+
       // Text fields
       inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: AppColors.greyDarker,
         labelStyle: AppTextStyles.p.copyWith(color: AppColors.greyLight),
-        floatingLabelStyle: AppTextStyles.pSm.copyWith(color: AppColors.primary),
+        floatingLabelStyle: AppTextStyles.pSm.copyWith(color: AppColors.secondary),
         contentPadding: const EdgeInsets.all(AppSpacing.paddingMd),
         border: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
@@ -82,7 +101,7 @@ class AppTheme {
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
-          borderSide: BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: AppColors.secondary),
         ),
         errorBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
