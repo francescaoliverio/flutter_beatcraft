@@ -46,7 +46,7 @@ Statistics, followers and likes are static sample data. Remixes are not publishe
 The Remix button is enabled only when both conditions are true:
 
 1. The artist allows downloads: the Jamendo field `audiodownload_allowed` is `true`.
-2. The license allows derivative works: the license URL in `license_ccurl` is not a NoDerivatives (`-nd`) license.
+2. The license allows derivative works: the license URL in license_ccurl is present and is not a NoDerivatives (-nd) license.
 
 Otherwise the button is disabled and its label changes to **Remix not allowed**.
 
