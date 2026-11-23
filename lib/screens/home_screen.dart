@@ -28,9 +28,13 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.paddingLg),
+        // No side padding: MediaSection rows reach the screen edges and add their own margin
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.paddingLg),
         children: [
-          const Heading('Home'),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg),
+            child: Heading('Home'),
+          ),
           const SizedBox(height: AppSpacing.paddingLg),
           MediaSection<Track>(
             title: 'New releases',
