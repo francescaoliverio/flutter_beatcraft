@@ -95,11 +95,15 @@ class _ErrorForSection extends StatelessWidget {
     final JamendoFailure failure = error is JamendoException
         ? (error as JamendoException).failure
         : JamendoFailure.other;
-
     return switch (failure) {
       JamendoFailure.missingClientId => ErrorBox(
         title: 'Jamendo key missing',
-        description: 'Run the app with --dart-define=JAMENDO_CLIENT_ID=…',
+        description: 'Add JAMENDO_CLIENT_ID to .env and run with --dart-define-from-file=.env.',
+        onRetry: onRetry,
+      ),
+      JamendoFailure.invalidClientId => ErrorBox(
+        title: 'Jamendo key not valid',
+        description: 'Check JAMENDO_CLIENT_ID in .env.',
         onRetry: onRetry,
       ),
       JamendoFailure.empty => ErrorBox(

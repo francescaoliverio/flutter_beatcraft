@@ -7,8 +7,11 @@ import '../models/playlist.dart';
 import '../models/track.dart';
 
 enum JamendoFailure {
-  /// The app was started without `--dart-define=JAMENDO_CLIENT_ID=...`.
+  /// The app was started without `JAMENDO_CLIENT_ID`.
   missingClientId,
+
+  /// Jamendo doesn't accept the `JAMENDO_CLIENT_ID` the app was started with.
+  invalidClientId,
 
   /// Still no results after all attempts.
   empty,
@@ -82,6 +85,9 @@ class JamendoService {
     throw const JamendoException(JamendoFailure.empty);
   }
 
+  /// Jamendo error code for an invalid client_id (developer.jamendo.com/v3.0/response-codes).
+  static const int _invalidClientIdCode = 5;
+
   Future<List<dynamic>> _request(Uri uri) async {
     final http.Response response;
     try {
@@ -91,17 +97,22 @@ class JamendoService {
     }
     if (response.statusCode != 200) throw const JamendoException(JamendoFailure.other);
 
+    final Object? code;
+    final List<dynamic> results;
     try {
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       // Errors come with HTTP 200: the outcome is in headers.code (0 = success)
-      final headers = json['headers'] as Map<String, dynamic>;
-      if (headers['code'] != 0) throw const JamendoException(JamendoFailure.other);
-      return json['results'] as List<dynamic>;
+      code = (json['headers'] as Map<String, dynamic>)['code'];
+      results = json['results'] as List<dynamic>;
     } on FormatException {
       throw const JamendoException(JamendoFailure.other);
     } on TypeError {
       throw const JamendoException(JamendoFailure.other);
     }
+
+    if (code == _invalidClientIdCode) throw const JamendoException(JamendoFailure.invalidClientId);
+    if (code != 0) throw const JamendoException(JamendoFailure.other);
+    return results;
   }
 
   List<T> _parse<T>(List<dynamic> results, T Function(Map<String, dynamic>) fromJson) {

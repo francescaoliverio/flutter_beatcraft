@@ -54,9 +54,15 @@ void main() {
     });
 
     test('an error code with HTTP 200 is a failure', () {
-      final service = JamendoService(MockClient((_) async => http.Response(body(code: 5), 200)), 'test-id');
+      final service = JamendoService(MockClient((_) async => http.Response(body(code: 6), 200)), 'test-id');
 
       expect(service.newReleases(limit: 7), throwsJamendoFailure(JamendoFailure.other));
+    });
+
+    test('code 5 means the client id is not valid', () {
+      final service = JamendoService(MockClient((_) async => http.Response(body(code: 5), 200)), 'wrong-id');
+
+      expect(service.newReleases(limit: 7), throwsJamendoFailure(JamendoFailure.invalidClientId));
     });
 
     test('empty results are retried, and the first non-empty answer is used', () async {
