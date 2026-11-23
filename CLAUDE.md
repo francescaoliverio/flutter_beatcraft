@@ -45,6 +45,9 @@ lib/
 - Jamendo `/playlists` fails with `Internal Error` without a filter: always pass one (e.g. `namesearch`).
 - Jamendo playlists: `user_name` can contain an email address. Never read or show it.
 - Jamendo tracks: `waveform` (when present) is a JSON string inside the JSON and needs a second decode.
+- Jamendo errors come with HTTP 200: check `headers.code` (0 = success).
+- Jamendo sometimes returns empty `results` with `code` 0: retry before showing an error.
+- Jamendo `headers.next` contains the full URL with `client_id`: never log or show it.
 - Remix allowed only if `audiodownload_allowed` is true and `license_ccurl` is present and not NoDerivatives (`-nd`).
 - Remixes are non-destructive: saved as a project (track id + clips), never as an audio copy of the track.
 - DummyJSON: demo login, token kept in memory only.
