@@ -50,7 +50,7 @@ lib/
 - Jamendo `headers.next` contains the full URL with `client_id`: never log or show it.
 - Remix allowed only if `audiodownload_allowed` is true and `license_ccurl` is present and not NoDerivatives (`-nd`).
 - Remixes are non-destructive: saved as a project (track id + clips), never as an audio copy of the track.
-- DummyJSON: demo login, token kept in memory only.
+- DummyJSON: demo login, token kept in memory only. Only the user id is saved on the device (`shared_preferences`), to skip the login at launch via `/users/{id}`.
 
 ## Known issues
 

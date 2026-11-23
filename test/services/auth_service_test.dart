@@ -68,4 +68,35 @@ void main() {
       expect(service.login('emilys', 'emilyspass'), throwsAuthFailure(AuthFailure.other));
     });
   });
+
+  group('AuthService.fetchUser', () {
+    test('returns the user from /users/{id}', () async {
+      late Uri sent;
+      final service = AuthService(
+        MockClient((request) async {
+          sent = request.url;
+          return http.Response(jsonEncode(successBody), 200);
+        }),
+      );
+
+      final user = await service.fetchUser(1);
+
+      expect(sent.toString(), 'https://dummyjson.com/users/1');
+      expect(user?.username, 'emilys');
+    });
+
+    test('404 means the user does not exist', () async {
+      final service = AuthService(
+        MockClient((_) async => http.Response(jsonEncode({'message': "User with id '99' not found"}), 404)),
+      );
+
+      expect(await service.fetchUser(99), isNull);
+    });
+
+    test('network error is a generic failure', () {
+      final service = AuthService(MockClient((_) async => throw http.ClientException('offline')));
+
+      expect(service.fetchUser(1), throwsAuthFailure(AuthFailure.other));
+    });
+  });
 }

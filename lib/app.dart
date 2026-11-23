@@ -12,7 +12,7 @@ class BeatCraftApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bool loggedIn = ref.watch(authProvider) != null;
+    final auth = ref.watch(authProvider);
 
     return MaterialApp(
       title: 'BeatCraft',
@@ -20,7 +20,12 @@ class BeatCraftApp extends ConsumerWidget {
       theme: AppTheme.dark,
       // No stretch effect when a list is scrolled past its ends (Android)
       scrollBehavior: const MaterialScrollBehavior().copyWith(overscroll: false),
-      home: loggedIn ? const MainShell() : const LoginScreen(),
+      home: switch (auth) {
+        // Saved user being restored at launch: empty dark screen, like the Android launch screen
+        AsyncLoading() when !auth.hasValue => const Scaffold(),
+        _ when auth.value != null => const MainShell(),
+        _ => const LoginScreen(),
+      },
     );
   }
 }

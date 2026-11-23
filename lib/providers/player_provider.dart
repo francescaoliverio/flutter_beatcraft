@@ -1,12 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/track.dart';
 import '../services/jamendo_service.dart';
-import '../services/local_storage.dart';
 import 'jamendo_provider.dart';
-
-final localStorageProvider = Provider<LocalStorage>((ref) => LocalStorage(SharedPreferencesAsync()));
+import 'local_storage_provider.dart';
 
 /// Track shown in the player and mini player: null when nothing was played yet.
 /// Only its id is saved on the device; at launch the track is fetched again from Jamendo.
