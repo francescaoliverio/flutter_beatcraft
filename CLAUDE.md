@@ -41,7 +41,7 @@ lib/
 
 ## APIs
 
-- Jamendo: `client_id` passed with `--dart-define=JAMENDO_CLIENT_ID=...`, read with `String.fromEnvironment`. Never write it in the code or in committed files.
+- Jamendo: `client_id` passed with `--dart-define=JAMENDO_CLIENT_ID=...` or `--dart-define-from-file=.env` (`.env` is gitignored), read with `String.fromEnvironment`. Never write it in the code or in committed files.
 - Jamendo `/playlists` fails with `Internal Error` without a filter: always pass one (e.g. `namesearch`).
 - Jamendo playlists: `user_name` can contain an email address. Never read or show it.
 - Jamendo tracks: `waveform` (when present) is a JSON string inside the JSON and needs a second decode.

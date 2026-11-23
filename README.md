@@ -146,6 +146,13 @@ flutter run --dart-define=JAMENDO_CLIENT_ID=your_client_id
 
 API keys are not stored in this repository. Register an app on the Jamendo developer portal to get your own credentials and pass them at launch as shown above.
 
+Alternatively, put the key in a `.env` file in the project root (it is ignored by git) and launch with `--dart-define-from-file`:
+
+```bash
+echo "JAMENDO_CLIENT_ID=your_client_id" > .env
+flutter run --dart-define-from-file=.env
+```
+
 ## Design
 
 The visual identity is dark mode first, with a neon green and purple palette. Colors, typography, spacing and effects are defined as tokens in Figma and mirrored in `lib/theme/`.
