@@ -6,5 +6,8 @@ class AppSpacing {
   static const double paddingLg = 20;
 
   static const double radiusMd = 6;
+
+  /// Width of the image in a MediaCard.
+  static const double mediaCard = 120;
   static const double radiusPill = 999;
 }
