@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter_beatcraft/models/timeline_clip.dart';
 import 'package:flutter_beatcraft/models/track.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_beatcraft/providers/playback_provider.dart';
@@ -64,6 +66,18 @@ class FakeAudioEngine implements AudioEngine {
 
   @override
   bool get hasEnded => false;
+
+  @override
+  Future<Float32List> waveform(int points) async => Float32List(points);
+
+  @override
+  void playTimeline(List<TimelineClip> clips, Duration from) {}
+
+  @override
+  void stopTimeline() {}
+
+  @override
+  Duration get timelinePosition => Duration.zero;
 
   @override
   Future<void> dispose() async {}

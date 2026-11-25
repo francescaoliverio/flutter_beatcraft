@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:http/http.dart' as http;
+
+import '../models/timeline_clip.dart';
 
 /// Loading a track failed: network error, HTTP status other than 200, engine not available or audio not decodable.
 class AudioLoadException implements Exception {
@@ -16,7 +21,39 @@ class AudioLoadCancelled implements Exception {
   const AudioLoadCancelled();
 }
 
-/// Plays one track at a time. Abstract so tests can replace the real engine with a fake.
+/// The part of a [TimelineClip] that plays when the timeline starts from a given position.
+class TimelinePart {
+  const TimelinePart({required this.delay, required this.sourceStart, required this.length});
+
+  /// Time from the timeline start to the moment this part begins.
+  final Duration delay;
+
+  /// Where the part begins in the original track.
+  final Duration sourceStart;
+
+  final Duration length;
+}
+
+/// What plays when the timeline starts from [from]: clips that end before it are skipped,
+/// a clip that contains it plays only its remaining part.
+List<TimelinePart> planTimeline(List<TimelineClip> clips, Duration from) {
+  final List<TimelinePart> parts = [];
+  for (final TimelineClip clip in clips) {
+    if (clip.timelineEnd <= from) continue;
+    final Duration skipped = from > clip.timelineStart ? from - clip.timelineStart : Duration.zero;
+    parts.add(
+      TimelinePart(
+        delay: clip.timelineStart + skipped - from,
+        sourceStart: clip.sourceStart + skipped,
+        length: clip.length - skipped,
+      ),
+    );
+  }
+  return parts;
+}
+
+/// Plays one track at a time, whole or as a timeline of clips.
+/// Abstract so tests can replace the real engine with a fake.
 abstract class AudioEngine {
   /// Downloads [url] and replaces the current track, paused at the start. Returns the track length.
   Future<Duration> load(String url);
@@ -33,6 +70,18 @@ abstract class AudioEngine {
   /// True from the end of the track until the next [play] or [seek].
   bool get hasEnded;
 
+  /// Loudness of the current track in [points] equal slices, from 0 to 1. Empty if no track is loaded.
+  Future<Float32List> waveform(int points);
+
+  /// Pauses the whole track and plays [clips] from the timeline position [from].
+  void playTimeline(List<TimelineClip> clips, Duration from);
+
+  void stopTimeline();
+
+  /// Time played on the timeline since [playTimeline], added to its `from`. It keeps growing after the last clip
+  /// and stays still after [stopTimeline].
+  Duration get timelinePosition;
+
   Future<void> dispose();
 }
 
@@ -42,12 +91,26 @@ abstract class AudioEngine {
 class SoLoudAudioEngine implements AudioEngine {
   SoLoudAudioEngine(this._client);
 
+  /// Time between [playTimeline] and the first sound, so every clip is scheduled and seeked before it starts.
+  static const Duration _scheduleLead = Duration(milliseconds: 100);
+
+  /// The default is 16 and, when it is reached, the engine stops the oldest voice of the same track:
+  /// with one voice per clip, a longer remix would lose its first clips.
+  static const int _maxVoices = 128;
+
   final http.Client _client;
   final SoLoud _soloud = SoLoud.instance;
 
   AudioSource? _source;
   SoundHandle? _handle;
   Duration _length = Duration.zero;
+
+  /// Compressed bytes of the current track, kept for [waveform].
+  Uint8List? _bytes;
+
+  final List<SoundHandle> _timelineHandles = [];
+  Duration? _timelineStartedAt;
+  Duration _timelineFrom = Duration.zero;
 
   /// Incremented by every [load], to recognize loads overtaken by a newer one.
   int _loadId = 0;
@@ -57,7 +120,10 @@ class SoLoudAudioEngine implements AudioEngine {
     final int loadId = ++_loadId;
 
     try {
-      if (!_soloud.isInitialized) await _soloud.init();
+      if (!_soloud.isInitialized) {
+        await _soloud.init();
+        _soloud.setMaxActiveVoiceCount(_maxVoices);
+      }
     } on SoLoudException catch (e) {
       throw AudioLoadException(e.toString());
     }
@@ -75,9 +141,9 @@ class SoLoudAudioEngine implements AudioEngine {
 
     final AudioSource source;
     try {
-      // LoadMode.disk with loadMem: the compressed bytes stay in memory and are decoded while playing,
-      // so a track takes a few MB instead of the tens of MB of fully decoded audio
-      source = await _soloud.loadMem(url, response.bodyBytes, mode: LoadMode.disk);
+      // LoadMode.memory decodes the whole track into memory: about 20 MB per minute of stereo audio.
+      // With LoadMode.disk an MP3 seek is delayed, and the timeline seeks at the start of every clip.
+      source = await _soloud.loadMem(url, response.bodyBytes, mode: LoadMode.memory);
     } on SoLoudException catch (e) {
       throw AudioLoadException(e.toString());
     }
@@ -87,6 +153,7 @@ class SoLoudAudioEngine implements AudioEngine {
     }
 
     _source = source;
+    _bytes = response.bodyBytes;
     _handle = _soloud.play(source, paused: true);
     _length = _soloud.getLength(source);
     return _length;
@@ -131,11 +198,64 @@ class SoLoudAudioEngine implements AudioEngine {
   @override
   bool get hasEnded => _source != null && !_hasValidHandle;
 
+  @override
+  Future<Float32List> waveform(int points) async {
+    final Uint8List? bytes = _bytes;
+    if (bytes == null) return Float32List(0);
+    try {
+      // average: true gives the RMS of each slice instead of its first sample
+      return await _soloud.readSamplesFromMem(bytes, points, average: true);
+    } on SoLoudException catch (e) {
+      throw AudioLoadException(e.toString());
+    }
+  }
+
+  @override
+  void playTimeline(List<TimelineClip> clips, Duration from) {
+    final AudioSource? source = _source;
+    if (source == null) return;
+    stopTimeline();
+    pause();
+
+    final Duration start = _soloud.getEngineTime() + _scheduleLead;
+    for (final TimelinePart part in planTimeline(clips, from)) {
+      final SoundHandle handle = _soloud.playScheduled(source, start + part.delay, duration: part.length);
+      // A scheduled voice doesn't read the track before its start time, so this seek sets where it begins
+      _soloud.seek(handle, part.sourceStart);
+      _timelineHandles.add(handle);
+    }
+    _timelineStartedAt = start;
+    _timelineFrom = from;
+  }
+
+  @override
+  void stopTimeline() {
+    // Keeps the reached position, so playing again from timelinePosition resumes where it stopped
+    _timelineFrom = timelinePosition;
+    for (final SoundHandle handle in _timelineHandles) {
+      if (_soloud.getIsValidVoiceHandle(handle)) unawaited(_soloud.stop(handle));
+    }
+    _timelineHandles.clear();
+    _timelineStartedAt = null;
+  }
+
+  @override
+  Duration get timelinePosition {
+    final Duration? startedAt = _timelineStartedAt;
+    if (startedAt == null) return _timelineFrom;
+    final Duration elapsed = _soloud.getEngineTime() - startedAt;
+    return _timelineFrom + (elapsed.isNegative ? Duration.zero : elapsed);
+  }
+
   Future<void> _unload() async {
     final AudioSource? source = _source;
     _source = null;
     _handle = null;
     _length = Duration.zero;
+    _bytes = null;
+    _timelineHandles.clear();
+    _timelineStartedAt = null;
+    _timelineFrom = Duration.zero;
     // disposeSource also stops every handle of the source
     if (source != null) await _soloud.disposeSource(source);
   }
