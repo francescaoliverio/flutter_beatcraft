@@ -231,6 +231,11 @@ class _Editor extends ConsumerWidget {
                 icon: PhosphorIconsRegular.trash,
                 onPressed: hasSelection ? controls.deleteSelected : null,
               ),
+              _Tool(
+                label: 'Close gaps',
+                icon: PhosphorIconsRegular.arrowsInLineHorizontal,
+                onPressed: editor.hasGaps ? controls.closeGaps : null,
+              ),
             ],
           ),
         ),
@@ -238,7 +243,7 @@ class _Editor extends ConsumerWidget {
         Text(
           editor.clips.isEmpty
               ? 'No clips left. Undo to bring them back.'
-              : 'Tap a clip to select it, drag it to move it. Split cuts at the playhead.',
+              : 'Tap a clip to select it, drag it to move it. Dropped on another clip, it is inserted there.',
           style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight),
         ),
       ],
@@ -315,6 +320,14 @@ class _TimelineState extends State<_Timeline> {
   Duration get _viewLength {
     final Duration longest = _editor.length > _editor.trackLength ? _editor.length : _editor.trackLength;
     return longest + _editor.trackLength * 0.25;
+  }
+
+  /// Where the dragged clip would be inserted if dropped now, null if it would stay where it is.
+  Duration? get _insertAt {
+    final int? clipId = _dragClipId;
+    if (clipId == null) return null;
+    final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == clipId);
+    return insertionPoint(_editor.clips.where((c) => c.id != clipId).toList(), _dragStart, clip.length);
   }
 
   /// Playhead value read by screen readers, kept between 0 and the end like a seek does.
@@ -448,7 +461,8 @@ class _TimelineState extends State<_Timeline> {
                 position: _editor.position,
                 rulerHeight: _rulerHeight,
                 onSelect: widget.controls.select,
-                onNudge: (clip, step) => widget.controls.move(clip.id, clip.timelineStart + step),
+                insertAt: _insertAt,
+                onNudge: (clip, step) => widget.controls.nudge(clip.id, step),
                 nudgeStep: _clipStep,
               ),
             ),
@@ -468,6 +482,7 @@ class _TimelinePainter extends CustomPainter {
     required this.pxPerMs,
     required this.position,
     required this.rulerHeight,
+    required this.insertAt,
     required this.onSelect,
     required this.onNudge,
     required this.nudgeStep,
@@ -480,6 +495,9 @@ class _TimelinePainter extends CustomPainter {
   final double pxPerMs;
   final Duration position;
   final double rulerHeight;
+
+  /// Insertion point of the clip being dragged, marked with a line.
+  final Duration? insertAt;
 
   /// For screen readers, which select and move clips without dragging.
   final ValueChanged<int?> onSelect;
@@ -518,6 +536,17 @@ class _TimelinePainter extends CustomPainter {
     final double peak = waveform.isEmpty ? 1 : max(waveform.reduce(max), 0.0001);
     for (final TimelineClip clip in _ordered) {
       _paintClip(canvas, size, clip, peak);
+    }
+    final Duration? insertAt = this.insertAt;
+    if (insertAt != null) {
+      final double x = insertAt.inMilliseconds * pxPerMs;
+      canvas.drawLine(
+        Offset(x, rulerHeight),
+        Offset(x, size.height),
+        Paint()
+          ..color = AppColors.tertiary
+          ..strokeWidth = 4,
+      );
     }
     _paintPlayhead(canvas, size);
   }
@@ -621,6 +650,7 @@ class _TimelinePainter extends CustomPainter {
       old.position != position ||
       old.clips != clips ||
       old.selectedClipId != selectedClipId ||
+      old.insertAt != insertAt ||
       old.waveform != waveform ||
       old.pxPerMs != pxPerMs ||
       old.trackLength != trackLength;

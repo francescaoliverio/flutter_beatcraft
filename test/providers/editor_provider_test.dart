@@ -126,18 +126,84 @@ void main() {
       expect(current().canUndo, isFalse);
     });
 
-    test('a moved clip keeps its audio and goes on top', () {
+    test('a clip moved to a free space keeps its audio and goes on top', () {
       editor
         ..seek(s(60))
         ..split();
       final int leftId = current().clips.first.id;
 
-      editor.move(leftId, s(150));
+      editor.move(leftId, s(200));
 
       final TimelineClip moved = current().clips.last;
       expect(moved.id, leftId);
-      expect((moved.sourceStart, moved.timelineStart), (s(0), s(150)));
-      expect(current().length, s(210));
+      expect((moved.sourceStart, moved.timelineStart), (s(0), s(200)));
+      expect(current().length, s(260));
+    });
+
+    test('dropped on the second half of a clip, a clip is inserted after it', () {
+      editor
+        ..seek(s(60))
+        ..split();
+      final int leftId = current().clips.first.id;
+
+      // Right part is 60-180: 150 is in its second half
+      editor.move(leftId, s(150));
+
+      expect(current().clips.firstWhere((c) => c.id == leftId).timelineStart, s(180));
+    });
+
+    test('dropped on the first half of a clip, a clip is inserted before it and the rest moves right', () {
+      // Three clips of 60 s back to back: A 0-60, B 60-120, C 120-180
+      editor
+        ..seek(s(60))
+        ..split()
+        ..seek(s(120))
+        ..split();
+      final [TimelineClip a, TimelineClip b, TimelineClip c] = current().clips;
+
+      // C dropped on the first half of A
+      editor.move(c.id, s(10));
+
+      TimelineClip byId(int id) => current().clips.firstWhere((clip) => clip.id == id);
+      expect(byId(c.id).timelineStart, s(0));
+      expect(byId(a.id).timelineStart, s(60));
+      expect(byId(b.id).timelineStart, s(120));
+      // C left 120-180 free and B moved into it: still a row without gaps
+      expect(current().hasGaps, isFalse);
+    });
+
+    test('close gaps puts the clips in a row from the start, in timeline order', () {
+      editor
+        ..seek(s(60))
+        ..split();
+      final [TimelineClip left, TimelineClip right] = current().clips;
+      editor.move(left.id, s(200));
+      expect(current().hasGaps, isTrue);
+
+      editor.closeGaps();
+
+      TimelineClip byId(int id) => current().clips.firstWhere((clip) => clip.id == id);
+      expect(byId(right.id).timelineStart, Duration.zero);
+      expect(byId(left.id).timelineStart, s(120));
+      expect(current().hasGaps, isFalse);
+
+      editor.undo();
+      expect(byId(left.id).timelineStart, s(200));
+    });
+
+    test('nudge stops against the next clip instead of pushing it', () {
+      editor
+        ..seek(s(60))
+        ..split();
+      final [TimelineClip left, TimelineClip right] = current().clips;
+
+      editor.nudge(left.id, s(1));
+
+      expect(current().clips.firstWhere((c) => c.id == left.id).timelineStart, Duration.zero);
+      expect(current().clips.firstWhere((c) => c.id == right.id).timelineStart, s(60));
+
+      editor.nudge(right.id, s(1));
+      expect(current().clips.firstWhere((c) => c.id == right.id).timelineStart, s(61));
     });
 
     test('a clip cannot move before the start', () {

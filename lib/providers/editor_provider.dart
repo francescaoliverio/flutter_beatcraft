@@ -33,6 +33,32 @@ const Duration _tick = Duration(milliseconds: 50);
 /// Shortest clip a split can leave on either side.
 const Duration minClipLength = Duration(milliseconds: 100);
 
+/// Where a clip of [length] dropped at [start] is inserted, or null if it fits there without covering [others].
+/// Dropped over a clip, it goes before it (first half) or after it (second half); otherwise it goes at [start].
+Duration? insertionPoint(List<TimelineClip> others, Duration start, Duration length) {
+  final Duration end = start + length;
+  if (!others.any((c) => c.timelineStart < end && c.timelineEnd > start)) return null;
+  final TimelineClip? under = others.where((c) => c.timelineStart < start && c.timelineEnd > start).lastOrNull;
+  if (under == null) return start;
+  return start < under.timelineStart + under.length ~/ 2 ? under.timelineStart : under.timelineEnd;
+}
+
+/// [clips] one after the other from 0, in timeline order (list order for equal starts). Drawing order is kept.
+List<TimelineClip> packClips(List<TimelineClip> clips) {
+  final List<int> order = List.generate(clips.length, (i) => i)
+    ..sort((a, b) {
+      final int byStart = clips[a].timelineStart.compareTo(clips[b].timelineStart);
+      return byStart != 0 ? byStart : a.compareTo(b);
+    });
+  final Map<int, Duration> starts = {};
+  Duration cursor = Duration.zero;
+  for (final int i in order) {
+    starts[clips[i].id] = cursor;
+    cursor += clips[i].length;
+  }
+  return [for (final TimelineClip clip in clips) clip.copyWith(timelineStart: starts[clip.id])];
+}
+
 /// The remix being edited.
 class EditorState {
   const EditorState({
@@ -79,6 +105,12 @@ class EditorState {
       clips.fold(Duration.zero, (Duration end, TimelineClip clip) => clip.timelineEnd > end ? clip.timelineEnd : end);
 
   TimelineClip? get selectedClip => clips.where((clip) => clip.id == selectedClipId).firstOrNull;
+
+  /// True if Close gaps would move something: a gap, an overlap or a first clip not at 0.
+  bool get hasGaps {
+    final List<TimelineClip> packed = packClips(clips);
+    return packed.indexed.any((entry) => entry.$2.timelineStart != clips[entry.$1].timelineStart);
+  }
 
   /// The clip a split cuts: the selected one if the playhead is on it, otherwise the topmost under the playhead.
   /// Null if the cut would leave a piece shorter than [minClipLength].
@@ -295,18 +327,55 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     _edit(editor, editor.clips.where((c) => c.id != clip.id).toList(), clearSelection: true);
   }
 
-  /// Places a clip at [timelineStart] (not before 0) and selects it. Overlapping clips play together.
+  /// Drops a clip at [timelineStart] (not before 0) and selects it.
+  /// In a free space it stays there. Over other clips it is inserted (see [insertionPoint])
+  /// and every clip from that point moves right by its length.
   void move(int clipId, Duration timelineStart) {
     final EditorState? editor = state.value;
     if (editor == null) return;
     final Duration start = timelineStart < Duration.zero ? Duration.zero : timelineStart;
     final TimelineClip? clip = editor.clips.where((c) => c.id == clipId).firstOrNull;
     if (clip == null || clip.timelineStart == start) return;
+    final List<TimelineClip> others = editor.clips.where((c) => c.id != clipId).toList();
+    final Duration? insertAt = insertionPoint(others, start, clip.length);
     // The moved clip goes last, so it is drawn on top
     _edit(editor, [
-      ...editor.clips.where((c) => c.id != clipId),
-      clip.copyWith(timelineStart: start),
+      for (final TimelineClip c in others)
+        if (insertAt != null && c.timelineStart >= insertAt)
+          c.copyWith(timelineStart: c.timelineStart + clip.length)
+        else
+          c,
+      clip.copyWith(timelineStart: insertAt ?? start),
     ], selectedClipId: clipId);
+  }
+
+  /// Moves a clip by [step], stopping against its neighbours instead of pushing them. For screen readers.
+  void nudge(int clipId, Duration step) {
+    final EditorState? editor = state.value;
+    final TimelineClip? clip = editor?.clips.where((c) => c.id == clipId).firstOrNull;
+    if (editor == null || clip == null) return;
+    final Iterable<TimelineClip> others = editor.clips.where((c) => c.id != clipId);
+    Duration start = clip.timelineStart + step;
+    if (step > Duration.zero) {
+      for (final TimelineClip next in others.where((c) => c.timelineStart >= clip.timelineEnd)) {
+        final Duration limit = next.timelineStart - clip.length;
+        if (start > limit) start = limit;
+      }
+    } else {
+      for (final TimelineClip previous in others.where((c) => c.timelineEnd <= clip.timelineStart)) {
+        if (start < previous.timelineEnd) start = previous.timelineEnd;
+      }
+      if (start < Duration.zero) start = Duration.zero;
+    }
+    if (start == clip.timelineStart) return;
+    _edit(editor, [for (final TimelineClip c in editor.clips) c.id == clipId ? c.copyWith(timelineStart: start) : c]);
+  }
+
+  /// Puts the clips one after the other from the start, in their timeline order.
+  void closeGaps() {
+    final EditorState? editor = state.value;
+    if (editor == null || !editor.hasGaps) return;
+    _edit(editor, packClips(editor.clips));
   }
 
   void undo() {
