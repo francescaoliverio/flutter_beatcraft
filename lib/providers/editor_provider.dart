@@ -3,12 +3,19 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/remix_project.dart';
 import '../models/timeline_clip.dart';
 import '../models/track.dart';
 import '../services/audio_engine.dart';
 import 'http_client_provider.dart';
+import 'jamendo_provider.dart';
 import 'playback_provider.dart';
 import 'remix_provider.dart';
+
+/// A saved remix can't be opened: its track is not on Jamendo anymore, or can't be remixed anymore.
+class RemixUnavailableException implements Exception {
+  const RemixUnavailableException();
+}
 
 /// Engine of the remix editor, separate from the player's: each keeps its own track loaded.
 final editorEngineProvider = Provider<AudioEngine>((ref) {
@@ -33,6 +40,9 @@ class EditorState {
     required this.trackLength,
     required this.waveform,
     required this.clips,
+    required this.name,
+    this.projectId,
+    this.hasUnsavedChanges = false,
     this.selectedClipId,
     this.canUndo = false,
     this.canRedo = false,
@@ -48,6 +58,13 @@ class EditorState {
 
   /// In drawing order: when clips overlap, the later one is on top.
   final List<TimelineClip> clips;
+
+  final String name;
+
+  /// Null until the remix is saved for the first time.
+  final String? projectId;
+
+  final bool hasUnsavedChanges;
 
   final int? selectedClipId;
   final bool canUndo;
@@ -75,6 +92,9 @@ class EditorState {
 
   EditorState copyWith({
     List<TimelineClip>? clips,
+    String? name,
+    String? projectId,
+    bool? hasUnsavedChanges,
     int? selectedClipId,
     bool clearSelection = false,
     bool? canUndo,
@@ -87,6 +107,9 @@ class EditorState {
       trackLength: trackLength,
       waveform: waveform,
       clips: clips ?? this.clips,
+      name: name ?? this.name,
+      projectId: projectId ?? this.projectId,
+      hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
       selectedClipId: clearSelection ? null : (selectedClipId ?? this.selectedClipId),
       canUndo: canUndo ?? this.canUndo,
       canRedo: canRedo ?? this.canRedo,
@@ -96,8 +119,8 @@ class EditorState {
   }
 }
 
-/// Loads the track of [remixTrackProvider], edits its clips and plays the timeline.
-/// Null while no track was chosen for remixing.
+/// Opens what [remixProvider] asks for, edits its clips, plays the timeline and saves it as a project.
+/// Null while nothing was chosen for remixing.
 class EditorNotifier extends AsyncNotifier<EditorState?> {
   Timer? _ticker;
 
@@ -111,7 +134,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   @override
   Future<EditorState?> build() async {
-    final Track? track = ref.watch(remixTrackProvider);
+    final RemixRequest? request = ref.watch(remixProvider);
     // Read before onDispose: Riverpod forbids using ref inside life-cycle callbacks
     final AudioEngine engine = _engine;
     ref.onDispose(() {
@@ -121,15 +144,29 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     _undo.clear();
     _redo.clear();
     _nextClipId = 0;
-    if (track == null) return null;
+    if (request == null) return null;
+    final RemixProject? project = request.project;
 
     // Only one plays at a time: the player starting stops the timeline
     ref.listen(playbackProvider.select((p) => p.isPlaying), (_, bool playing) {
       if (playing) pause();
     });
 
+    final Track track = request.track ?? await _projectTrack(project!);
     final Duration length = await _engine.load(track.audio);
     final Float32List waveform = await _engine.waveform(_waveformPoints);
+
+    if (project != null) {
+      _nextClipId = project.clips.fold(0, (int next, TimelineClip clip) => clip.id >= next ? clip.id + 1 : next);
+      return EditorState(
+        track: track,
+        trackLength: length,
+        waveform: waveform,
+        clips: project.clips,
+        name: project.name,
+        projectId: project.id,
+      );
+    }
     return EditorState(
       track: track,
       trackLength: length,
@@ -138,6 +175,48 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
       clips: [
         TimelineClip(id: _nextClipId++, sourceStart: Duration.zero, sourceEnd: length, timelineStart: Duration.zero),
       ],
+      name: '${track.name} remix',
+      hasUnsavedChanges: true,
+    );
+  }
+
+  /// The track of a saved remix, fetched again from Jamendo and checked against the remix rule.
+  Future<Track> _projectTrack(RemixProject project) async {
+    final Track? track = await ref.read(jamendoServiceProvider).trackById(project.trackId);
+    if (track == null || !track.canRemix) throw const RemixUnavailableException();
+    return track;
+  }
+
+  // Project
+
+  void rename(String name) {
+    final EditorState? editor = state.value;
+    final String trimmed = name.trim();
+    if (editor == null || trimmed.isEmpty || trimmed == editor.name) return;
+    state = AsyncData(editor.copyWith(name: trimmed, hasUnsavedChanges: true));
+  }
+
+  /// Saves the remix as a project: the first time it gets an id, then it is updated in place.
+  Future<void> save() async {
+    final EditorState? editor = state.value;
+    if (editor == null) return;
+    final String projectId = editor.projectId ?? DateTime.now().microsecondsSinceEpoch.toString();
+    await ref
+        .read(remixProjectsProvider.notifier)
+        .save(
+          RemixProject(
+            id: projectId,
+            name: editor.name,
+            trackId: editor.track.id,
+            clips: editor.clips,
+            updatedAt: DateTime.now(),
+          ),
+        );
+    // Edits made while saving are kept: only the project id and the saved flag change
+    final EditorState? current = state.value;
+    if (current == null) return;
+    state = AsyncData(
+      current.copyWith(projectId: projectId, hasUnsavedChanges: !identical(current.clips, editor.clips)),
     );
   }
 
@@ -255,6 +334,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
   void _apply(EditorState editor, List<TimelineClip> clips, {int? selectedClipId, bool clearSelection = false}) {
     EditorState next = editor.copyWith(
       clips: clips,
+      hasUnsavedChanges: true,
       selectedClipId: selectedClipId,
       // After undo or redo the selected clip may not exist anymore
       clearSelection: clearSelection || !clips.any((c) => c.id == (selectedClipId ?? editor.selectedClipId)),

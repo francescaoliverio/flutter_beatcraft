@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/models/timeline_clip.dart';
 import 'package:flutter_beatcraft/models/track.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
@@ -16,6 +17,7 @@ class FakeLocalStorage implements LocalStorage {
   int? userId;
   String? lastTrackId;
   List<String> favoriteTrackIds = [];
+  List<RemixProject> remixProjects = [];
 
   @override
   Future<int?> readUserId() async => userId;
@@ -40,6 +42,12 @@ class FakeLocalStorage implements LocalStorage {
 
   @override
   Future<void> saveFavoriteTrackIds(List<String> ids) async => favoriteTrackIds = ids;
+
+  @override
+  Future<List<RemixProject>> readRemixProjects() async => remixProjects;
+
+  @override
+  Future<void> saveRemixProjects(List<RemixProject> projects) async => remixProjects = projects;
 }
 
 /// Engine without audio: every load waits until the test calls [finish] or [fail].

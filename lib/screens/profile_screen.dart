@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../models/remix_project.dart';
 import '../models/track.dart';
 import '../providers/auth_provider.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/playback_provider.dart';
+import '../providers/remix_provider.dart';
 import '../providers/shell_tab_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -35,6 +37,7 @@ class ProfileScreen extends ConsumerWidget {
     // Only shown while logged in, but the session can become null during logout
     if (user == null) return const SizedBox.shrink();
     final List<String>? favorites = ref.watch(favoritesProvider).value;
+    final List<RemixProject> remixes = ref.watch(remixProjectsProvider).value ?? [];
 
     return SafeArea(
       child: ListView(
@@ -56,8 +59,8 @@ class ProfileScreen extends ConsumerWidget {
                   // tooltip is also the screen reader label
                   tooltip: 'Log out',
                   icon: const Icon(PhosphorIconsRegular.signOut),
-                  // Neutral colors from the icon button theme
                   onPressed: () => ref.read(authProvider.notifier).logout(),
+                  // Neutral colors from the icon button theme
                 ),
               ],
             ),
@@ -114,15 +117,100 @@ class ProfileScreen extends ConsumerWidget {
               children: [
                 const Heading('My remixes', style: HeadingStyle.h4),
                 const SizedBox(height: AppSpacing.paddingMd),
-                // TODO: show saved remix projects; for now there are none
-                EmptyState(
-                  message: "You don't have any remixes yet.",
-                  actionLabel: 'Make your first remix',
-                  actionIcon: PhosphorIconsRegular.waveform,
-                  onAction: () => ref.read(shellTabProvider.notifier).select(ShellTab.create),
-                ),
+                if (remixes.isEmpty)
+                  EmptyState(
+                    message: "You don't have any remixes yet.",
+                    actionLabel: 'Make your first remix',
+                    actionIcon: PhosphorIconsRegular.waveform,
+                    onAction: () => ref.read(shellTabProvider.notifier).select(ShellTab.create),
+                  )
+                else
+                  for (final RemixProject remix in remixes) _RemixRow(remix: remix),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A saved remix: tap to open it in Create, trash to delete it (with Undo).
+class _RemixRow extends ConsumerWidget {
+  const _RemixRow({required this.remix});
+
+  final RemixProject remix;
+
+  static const double _coverSize = 48;
+
+  void _open(WidgetRef ref) {
+    ref.read(remixProvider.notifier).open(remix);
+    ref.read(shellTabProvider.notifier).select(ShellTab.create);
+  }
+
+  void _delete(BuildContext context, WidgetRef ref) {
+    final RemixProjectsNotifier projects = ref.read(remixProjectsProvider.notifier);
+    projects.delete(remix.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${remix.name} deleted'),
+        action: SnackBarAction(label: 'Undo', onPressed: () => projects.save(remix)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final int clips = remix.clips.length;
+    final String seconds = (remix.length.inSeconds % 60).toString().padLeft(2, '0');
+    final String details = '$clips ${clips == 1 ? 'clip' : 'clips'} · ${remix.length.inMinutes}:$seconds';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.paddingSm),
+      child: Row(
+        children: [
+          Expanded(
+            // One item for screen readers: name and details, opened with a tap
+            child: Semantics(
+              button: true,
+              label: '${remix.name}, $details',
+              excludeSemantics: true,
+              onTap: () => _open(ref),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _open(ref),
+                child: Row(
+                  spacing: AppSpacing.paddingMd,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                      child: Image.asset(
+                        remix.coverAsset,
+                        width: _coverSize,
+                        height: _coverSize,
+                        fit: BoxFit.cover,
+                        // Decode at the displayed size: the covers are 1024 px
+                        cacheWidth: (_coverSize * MediaQuery.devicePixelRatioOf(context)).round(),
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(remix.name, style: AppTextStyles.pBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(details, style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(PhosphorIconsRegular.trash),
+            tooltip: 'Delete ${remix.name}',
+            onPressed: () => _delete(context, ref),
           ),
         ],
       ),

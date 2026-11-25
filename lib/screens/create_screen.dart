@@ -13,6 +13,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/button.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
 
@@ -22,14 +23,79 @@ String _formatTime(Duration time) {
   return '${time.inMinutes}:$seconds.${time.inMilliseconds % 1000 ~/ 100}';
 }
 
+/// Asks for a new remix name. Pops the name, or null if cancelled.
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({required this.current});
+
+  final String current;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _controller = TextEditingController(text: widget.current);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.bgDark,
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: AppColors.greyDark),
+        borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+      ),
+      title: const Heading('Rename remix', style: HeadingStyle.h4, uppercase: false),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 40,
+        textInputAction: TextInputAction.done,
+        decoration: const InputDecoration(labelText: 'Name'),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        Button(
+          label: 'Cancel',
+          color: ButtonColor.secondary,
+          variant: ButtonVariant.outline,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        Button(label: 'Rename', onPressed: () => Navigator.of(context).pop(_controller.text)),
+      ],
+    );
+  }
+}
+
 /// Remix editor: timeline with clips, playback and editing tools.
 class CreateScreen extends ConsumerWidget {
   const CreateScreen({super.key});
 
+  Future<void> _save(BuildContext context, WidgetRef ref) async {
+    await ref.read(editorProvider.notifier).save();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Remix saved')));
+  }
+
+  Future<void> _rename(BuildContext context, WidgetRef ref, String current) async {
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameDialog(current: current),
+    );
+    if (name != null) ref.read(editorProvider.notifier).rename(name);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<EditorState?> editor = ref.watch(editorProvider);
-    final EditorState? loaded = editor.value;
+    // While another remix loads, the previous one is not shown
+    final EditorState? loaded = editor.isLoading || editor.hasError ? null : editor.value;
+    final bool canSave = loaded != null && loaded.hasUnsavedChanges;
 
     return Scaffold(
       body: SafeArea(
@@ -42,23 +108,44 @@ class CreateScreen extends ConsumerWidget {
               Row(
                 children: [
                   const Expanded(child: Heading('Create')),
-                  Button(label: 'Save', icon: PhosphorIconsRegular.floppyDisk, onPressed: () {}),
+                  Button(
+                    // Saved: nothing changed since the last save
+                    label: loaded != null && !loaded.hasUnsavedChanges ? 'Saved' : 'Save',
+                    icon: PhosphorIconsRegular.floppyDisk,
+                    onPressed: canSave ? () => _save(context, ref) : null,
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.paddingMd),
-              const Heading('Remix name', style: HeadingStyle.h4, uppercase: false),
-              // Credits the original track, as its Creative Commons license requires
-              if (loaded != null)
+              if (loaded != null) ...[
+                Row(
+                  children: [
+                    Flexible(child: Heading(loaded.name, style: HeadingStyle.h4, uppercase: false)),
+                    IconButton(
+                      icon: const Icon(PhosphorIconsRegular.pencilSimple),
+                      tooltip: 'Rename remix',
+                      onPressed: () => _rename(context, ref, loaded.name),
+                    ),
+                  ],
+                ),
+                // Credits the original track, as its Creative Commons license requires
                 Text(
                   'From ${loaded.track.name} by ${loaded.track.artistName} · via Jamendo',
                   style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
                 ),
+              ],
               const SizedBox(height: AppSpacing.paddingLg),
               // isLoading first: after Retry the value can still hold the previous error while reloading
               if (editor.isLoading)
                 Semantics(
                   label: 'Loading track',
                   child: const Center(child: CircularProgressIndicator(color: AppColors.secondary)),
+                )
+              else if (editor.error is RemixUnavailableException)
+                ErrorBox(
+                  title: "This remix can't be opened",
+                  description: 'Its track was removed from Jamendo or can no longer be remixed.',
+                  onRetry: () => ref.invalidate(editorProvider),
                 )
               else if (editor.hasError)
                 ErrorBox(
@@ -67,8 +154,9 @@ class CreateScreen extends ConsumerWidget {
                   onRetry: () => ref.invalidate(editorProvider),
                 )
               else if (loaded == null)
-                // TODO: initial state of Create without a track
-                const SizedBox(height: 240, child: Placeholder(color: AppColors.greyDark))
+                const EmptyState(
+                  message: 'Open a track in the player and tap Remix, or open a saved remix from your profile.',
+                )
               else
                 _Editor(editor: loaded),
             ],

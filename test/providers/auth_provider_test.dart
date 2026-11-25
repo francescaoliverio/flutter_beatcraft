@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/providers/auth_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_beatcraft/services/auth_service.dart';
@@ -14,6 +15,7 @@ class FakeLocalStorage implements LocalStorage {
   int? userId;
   String? lastTrackId;
   List<String> favoriteTrackIds = [];
+  List<RemixProject> remixProjects = [];
 
   @override
   Future<int?> readUserId() async => userId;
@@ -38,6 +40,12 @@ class FakeLocalStorage implements LocalStorage {
 
   @override
   Future<void> saveFavoriteTrackIds(List<String> ids) async => favoriteTrackIds = ids;
+
+  @override
+  Future<List<RemixProject>> readRemixProjects() async => remixProjects;
+
+  @override
+  Future<void> saveRemixProjects(List<RemixProject> projects) async => remixProjects = projects;
 }
 
 const Map<String, Object> emily = {

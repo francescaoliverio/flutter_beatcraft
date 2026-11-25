@@ -35,7 +35,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   /// Closes the player on the Create tab, with [track] ready to remix.
   void _openInCreate(Track track) {
-    ref.read(remixTrackProvider.notifier).select(track);
+    ref.read(remixProvider.notifier).newRemix(track);
     ref.read(shellTabProvider.notifier).select(ShellTab.create);
     Navigator.of(context).pop();
   }

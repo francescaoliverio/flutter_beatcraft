@@ -1,29 +1,39 @@
 import 'dart:async';
 
+import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/models/timeline_clip.dart';
 import 'package:flutter_beatcraft/providers/editor_provider.dart';
+import 'package:flutter_beatcraft/providers/jamendo_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_beatcraft/providers/playback_provider.dart';
 import 'package:flutter_beatcraft/providers/player_provider.dart';
 import 'package:flutter_beatcraft/providers/remix_provider.dart';
+import 'package:flutter_beatcraft/services/jamendo_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+import '../models/jamendo_models_test.dart' show trackJson;
+import '../services/jamendo_service_test.dart' show body;
 
 import 'playback_provider_test.dart' show FakeAudioEngine, FakeLocalStorage, track;
 
 void main() {
   late FakeAudioEngine playerEngine;
   late FakeAudioEngine editorEngine;
+  late FakeLocalStorage storage;
   late ProviderContainer container;
 
   setUp(() async {
     playerEngine = FakeAudioEngine();
     editorEngine = FakeAudioEngine();
+    storage = FakeLocalStorage();
     container = ProviderContainer.test(
       overrides: [
         audioEngineProvider.overrideWithValue(playerEngine),
         editorEngineProvider.overrideWithValue(editorEngine),
-        localStorageProvider.overrideWithValue(FakeLocalStorage()),
+        localStorageProvider.overrideWithValue(storage),
       ],
     );
     await container.read(currentTrackProvider.future);
@@ -33,7 +43,7 @@ void main() {
 
   /// Chooses track 1 for remixing and finishes its load.
   Future<EditorState> openEditor() async {
-    container.read(remixTrackProvider.notifier).select(track('1'));
+    container.read(remixProvider.notifier).newRemix(track('1'));
     final Future<EditorState?> loaded = container.read(editorProvider.future);
     await Future<void>.delayed(Duration.zero);
     editorEngine.finish('https://example.com/1.mp3');
@@ -197,6 +207,92 @@ void main() {
       expect(current().isPlaying, isFalse);
       expect(current().length, Duration.zero);
       expect(editorEngine.timelineClips, isNull);
+    });
+  });
+
+  group('projects', () {
+    test('a new remix is unsaved and named after its track', () async {
+      final EditorState editor = await openEditor();
+
+      expect(editor.name, 'Track 1 remix');
+      expect(editor.projectId, isNull);
+      expect(editor.hasUnsavedChanges, isTrue);
+    });
+
+    test('save stores track id and clips, then edits mark it unsaved again', () async {
+      await openEditor();
+      final EditorNotifier editor = container.read(editorProvider.notifier)..rename('  Night remix ');
+
+      await editor.save();
+
+      final RemixProject saved = storage.remixProjects.single;
+      expect((saved.name, saved.trackId, saved.clips.length), ('Night remix', '1', 1));
+      expect(container.read(editorProvider).value!.projectId, saved.id);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isFalse);
+
+      editor
+        ..seek(const Duration(seconds: 60))
+        ..split();
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+
+      // Saving again updates the same project
+      await editor.save();
+      expect(storage.remixProjects.single.clips, hasLength(2));
+    });
+
+    /// A saved project of the track in [trackJson], with one clip.
+    RemixProject savedProject() => RemixProject(
+      id: '42',
+      name: 'Saved remix',
+      trackId: '2353774',
+      clips: const [
+        TimelineClip(id: 7, sourceStart: Duration.zero, sourceEnd: Duration(seconds: 10), timelineStart: Duration.zero),
+      ],
+      updatedAt: DateTime.utc(2026, 11, 25),
+    );
+
+    /// Jamendo answering with [trackJson] built from [json].
+    void jamendoReturns(Map<String, dynamic> json) {
+      container = ProviderContainer.test(
+        overrides: [
+          audioEngineProvider.overrideWithValue(playerEngine),
+          editorEngineProvider.overrideWithValue(editorEngine),
+          localStorageProvider.overrideWithValue(storage),
+          jamendoServiceProvider.overrideWithValue(
+            JamendoService(MockClient((_) async => http.Response(body(results: [json]), 200)), 'test-id'),
+          ),
+        ],
+      );
+      container.listen(editorProvider, (_, _) {});
+    }
+
+    test('a saved project reopens with its name, clips and track', () async {
+      jamendoReturns(trackJson());
+      container.read(remixProvider.notifier).open(savedProject());
+      final Future<EditorState?> loaded = container.read(editorProvider.future);
+      // Jamendo answers (a few async steps through the mock client), then the engine starts loading the track
+      for (int i = 0; i < 5; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      editorEngine.finish(trackJson()['audio'] as String);
+
+      final EditorState editor = (await loaded)!;
+      expect((editor.name, editor.projectId, editor.hasUnsavedChanges), ('Saved remix', '42', false));
+      expect(editor.clips.single.id, 7);
+      expect(editor.track.id, '2353774');
+
+      // New clips get ids after the saved ones
+      container.read(editorProvider.notifier)
+        ..seek(const Duration(seconds: 5))
+        ..split();
+      expect(container.read(editorProvider).value!.clips.last.id, 8);
+    });
+
+    test('a project whose track can no longer be remixed does not open', () async {
+      jamendoReturns(trackJson(license: 'http://creativecommons.org/licenses/by-nd/3.0/'));
+      container.read(remixProvider.notifier).open(savedProject());
+
+      await expectLater(container.read(editorProvider.future), throwsA(isA<RemixUnavailableException>()));
     });
   });
 }

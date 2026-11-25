@@ -8,6 +8,15 @@ class TimelineClip {
     required this.timelineStart,
   });
 
+  factory TimelineClip.fromJson(Map<String, dynamic> json) {
+    return TimelineClip(
+      id: json['id'] as int,
+      sourceStart: Duration(milliseconds: json['source_start_ms'] as int),
+      sourceEnd: Duration(milliseconds: json['source_end_ms'] as int),
+      timelineStart: Duration(milliseconds: json['timeline_start_ms'] as int),
+    );
+  }
+
   /// Unique within a remix, to select a clip and follow it through edits.
   final int id;
 
@@ -35,4 +44,11 @@ class TimelineClip {
       timelineStart: timelineStart ?? this.timelineStart,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'source_start_ms': sourceStart.inMilliseconds,
+    'source_end_ms': sourceEnd.inMilliseconds,
+    'timeline_start_ms': timelineStart.inMilliseconds,
+  };
 }
