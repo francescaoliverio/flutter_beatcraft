@@ -121,7 +121,7 @@ class _ProgressBar extends ConsumerWidget {
 
     // Decorative: the player screen has the accessible slider with the time
     return ExcludeSemantics(
-      child: LinearProgressIndicator(value: progress, color: AppColors.tertiary, backgroundColor: AppColors.greyDark),
+      child: LinearProgressIndicator(value: progress, color: AppColors.secondary, backgroundColor: AppColors.greyDark),
     );
   }
 }

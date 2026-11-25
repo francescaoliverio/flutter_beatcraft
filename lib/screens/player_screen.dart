@@ -106,7 +106,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                           child: Button(
                             label: 'Share',
                             icon: PhosphorIconsRegular.export,
-                            color: ButtonColor.secondary,
+                            color: ButtonColor.tertiary,
                             variant: ButtonVariant.outline,
                             layout: ButtonLayout.vertical,
                             // TODO: share the track
@@ -118,7 +118,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             label: track.canRemix ? 'Remix' : 'Not allowed',
                             semanticLabel: track.canRemix ? null : 'Remix not allowed',
                             icon: PhosphorIconsRegular.waveform,
-                            color: ButtonColor.secondary,
+                            color: ButtonColor.tertiary,
                             variant: ButtonVariant.outline,
                             layout: ButtonLayout.vertical,
                             onPressed: track.canRemix ? () => _openInCreate(track) : null,
@@ -128,7 +128,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                           child: Button(
                             label: isLiked ? 'Liked' : 'Like',
                             icon: isLiked ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
-                            color: ButtonColor.secondary,
+                            color: ButtonColor.tertiary,
                             variant: ButtonVariant.outline,
                             layout: ButtonLayout.vertical,
                             // Disabled until the saved likes are read

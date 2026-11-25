@@ -62,7 +62,7 @@ class _RenameDialogState extends State<_RenameDialog> {
       actions: [
         Button(
           label: 'Cancel',
-          color: ButtonColor.secondary,
+          color: ButtonColor.tertiary,
           variant: ButtonVariant.outline,
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -261,7 +261,7 @@ class _Tool extends StatelessWidget {
         label: label,
         semanticLabel: semanticLabel,
         icon: icon,
-        color: ButtonColor.secondary,
+        color: ButtonColor.tertiary,
         variant: ButtonVariant.outline,
         layout: ButtonLayout.vertical,
         onPressed: onPressed,

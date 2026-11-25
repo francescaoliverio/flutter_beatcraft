@@ -21,7 +21,7 @@ class LikeButton extends ConsumerWidget {
       // tooltip is also the screen reader label
       tooltip: isLiked ? 'Remove like' : 'Like',
       icon: const Icon(PhosphorIconsRegular.heart, color: AppColors.textLight),
-      selectedIcon: const Icon(PhosphorIconsFill.heart, color: AppColors.secondary),
+      selectedIcon: const Icon(PhosphorIconsFill.heart, color: AppColors.tertiary),
       // Disabled until the saved likes are read
       onPressed: favorites == null ? null : () => ref.read(favoritesProvider.notifier).toggle(trackId),
     );
