@@ -19,6 +19,32 @@ Matcher throwsJamendoFailure(JamendoFailure failure) =>
 
 void main() {
   group('JamendoService', () {
+    test('ready to remix asks for popular tracks without NoDerivatives and drops the ones without download', () async {
+      late Uri sent;
+      final service = JamendoService(
+        MockClient((request) async {
+          sent = request.url;
+          return http.Response(
+            body(
+              results: [
+                {...trackJson(), 'id': '1'},
+                {...trackJson(downloadAllowed: false), 'id': '2'},
+                {...trackJson(), 'id': '3'},
+              ],
+            ),
+            200,
+          );
+        }),
+        'test-id',
+      );
+
+      final tracks = await service.readyToRemix(limit: 7);
+
+      expect(sent.queryParameters['order'], 'popularity_week');
+      expect(sent.queryParameters['ccnd'], 'false');
+      expect(tracks.map((t) => t.id), ['1', '3']);
+    });
+
     test('sends the client id and the query, and parses the tracks', () async {
       late Uri sent;
       final service = JamendoService(

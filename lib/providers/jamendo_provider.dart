@@ -29,6 +29,11 @@ final newReleasesProvider = FutureProvider<List<Track>>(
   retry: _noRetry,
 );
 
+final readyToRemixProvider = FutureProvider<List<Track>>(
+  (ref) => ref.watch(jamendoServiceProvider).readyToRemix(limit: homeSectionLength),
+  retry: _noRetry,
+);
+
 final trendingArtistsProvider = FutureProvider<List<Artist>>(
   (ref) => ref.watch(jamendoServiceProvider).trendingArtists(limit: homeSectionLength),
   retry: _noRetry,

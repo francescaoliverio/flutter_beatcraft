@@ -53,6 +53,23 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.paddingLg),
+          MediaSection<Track>(
+            title: 'Ready to remix',
+            items: ref.watch(readyToRemixProvider),
+            itemBuilder: (track) => MediaCard(
+              image: NetworkImage(track.image),
+              fallbackImage: AssetImage(track.fallbackCoverAsset),
+              title: track.name,
+              subtitle: track.artistName,
+              onTap: () => _openTrack(context, ref, track),
+            ),
+            errorBuilder: (error) => _ErrorForSection(
+              error: error,
+              title: "Couldn't load tracks to remix",
+              onRetry: () => ref.invalidate(readyToRemixProvider),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.paddingLg),
           MediaSection<Artist>(
             title: 'Trending artists',
             items: ref.watch(trendingArtistsProvider),

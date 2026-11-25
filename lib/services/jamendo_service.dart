@@ -49,6 +49,21 @@ class JamendoService {
     return _parse(results, Track.fromJson);
   }
 
+  /// Most popular tracks of the week that can be remixed.
+  /// `ccnd=false` excludes NoDerivatives licenses on the server; downloads can't be filtered there,
+  /// so a few more tracks are requested and the ones that can't be remixed are dropped here.
+  Future<List<Track>> readyToRemix({required int limit}) async {
+    final results = await _get('tracks', {
+      'order': 'popularity_week',
+      'ccnd': 'false',
+      'limit': '${limit * 2}',
+      'imagesize': _imageSize,
+    });
+    final List<Track> remixable = _parse(results, Track.fromJson).where((track) => track.canRemix).take(limit).toList();
+    if (remixable.isEmpty) throw const JamendoException(JamendoFailure.empty);
+    return remixable;
+  }
+
   /// Most popular artists of the week, only those with a picture.
   Future<List<Artist>> trendingArtists({required int limit}) async {
     final results = await _get('artists', {'order': 'popularity_week', 'hasimage': 'true', 'limit': '$limit'});
