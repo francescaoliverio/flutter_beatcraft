@@ -16,28 +16,36 @@ This repository contains a working demo built with Flutter as an individual acad
 
 The Create screen is a timeline editor where you remix a Jamendo track.
 
-- [ ] Load a track and show its waveform on a timeline
-- [ ] Play the timeline with a moving playhead
-- [ ] Split a clip at the playhead
-- [ ] Drag clips along the timeline
-- [ ] Delete clips
-- [ ] Save and reopen remixes as local projects
+- [x] Load a track and show its waveform on a timeline
+- [x] Play the timeline with a moving playhead
+- [x] Split a clip at the playhead
+- [x] Drag clips along the timeline
+- [x] Delete clips
+- [x] Save and reopen remixes as local projects
 - [ ] Volume per clip and basic effects (if time allows)
 
-> ⚠️ **Feasibility under test.**  
-> Playing clips in sequence requires starting each part of the track from a precise point at a precise time.  
-> This is being tested with the audio engine before building the full editor.
+> ℹ️ **How clips play in sequence.**  
+> Each clip is scheduled on the clock of the audio engine and starts from its own point in the original track.  
+> The whole timeline is planned before the first sound, so the clips follow each other at the right time.
 
 ### Online features (external APIs)
 
 - [x] Login with a demo account (DummyJSON)
-- [ ] Home feed and music player with real Creative Commons tracks (Jamendo)
+- [x] Home feed and music player with real Creative Commons tracks (Jamendo)
+- [x] Ready to remix: popular tracks that can be remixed (Jamendo)
 - [ ] Trending artists (Jamendo)
 - [ ] Playlists (Jamendo)
 
+### Your library
+
+- [x] Like tracks and find them among your favorites in the profile
+- [x] Saved remixes in the profile, to reopen or delete
+
+Favorites, saved remixes and the last track played are kept on the device, separately for each user who logs in.
+
 ### Mock (UI only)
 
-Statistics, followers and likes are static sample data. Remixes are not published anywhere: they stay in the app's local library.
+Statistics and followers are static sample data. Remixes are not published anywhere: they stay in the app's local library.
 
 ## How remixing works
 
@@ -48,7 +56,7 @@ The Remix button is enabled only when both conditions are true:
 1. The artist allows downloads: the Jamendo field `audiodownload_allowed` is `true`.
 2. The license allows derivative works: the license URL in license_ccurl is present and is not a NoDerivatives (-nd) license.
 
-Otherwise the button is disabled and its label changes to **Remix not allowed**.
+Otherwise the button is disabled and its label changes to **Not allowed** (screen readers announce "Remix not allowed").
 
 NoDerivatives tracks are excluded even though remixes are never published: the rule is simple, consistent and respects the artist's choice.
 
