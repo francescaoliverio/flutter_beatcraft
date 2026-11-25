@@ -10,9 +10,13 @@ enum ButtonColor { primary, secondary, tertiary, error }
 
 enum ButtonVariant { filled, outline }
 
+/// [vertical]: icon above a smaller label, for rows of equal buttons (e.g. like, remix, share).
+enum ButtonLayout { horizontal, vertical }
+
 /// Button
 /// - With [label]: icon (optional) + text.
 /// - Without [label]: square icon-only button ([icon] required), described to screen readers by [semanticLabel].
+/// - [semanticLabel] with [label]: read instead of a short visible label.
 /// - [onPressed] null = disabled, as in Flutter's own buttons.
 
 class Button extends StatefulWidget {
@@ -23,17 +27,19 @@ class Button extends StatefulWidget {
     this.onPressed,
     this.color = ButtonColor.primary,
     this.variant = ButtonVariant.filled,
+    this.layout = ButtonLayout.horizontal,
     this.semanticLabel,
   }) : assert(label != null || icon != null, 'Button needs a label, an icon, or both');
 
   final String? label;
 
-  /// What screen readers announce for an icon-only button. Ignored when [label] is set.
+  /// What screen readers announce, when there is no [label] or it is too short to be clear alone.
   final String? semanticLabel;
   final IconData? icon;
   final VoidCallback? onPressed;
   final ButtonColor color;
   final ButtonVariant variant;
+  final ButtonLayout layout;
 
   @override
   State<Button> createState() => _ButtonState();
@@ -74,6 +80,12 @@ class _ButtonState extends State<Button> {
     }
   }
 
+  /// With a [Button.semanticLabel] the visible text is hidden from screen readers, so it isn't read twice.
+  Widget _visibleLabel(TextStyle style) => ExcludeSemantics(
+    excluding: widget.semanticLabel != null,
+    child: Text(widget.label!, textAlign: TextAlign.center, style: style),
+  );
+
   void _setPressed(bool value) {
     if (_enabled) setState(() => _pressed = value);
   }
@@ -90,7 +102,7 @@ class _ButtonState extends State<Button> {
     return Semantics(
       button: true,
       enabled: _enabled,
-      label: widget.label ?? widget.semanticLabel,
+      label: widget.semanticLabel ?? widget.label,
       // GestureDetector: detects touches on its child.
       // Used instead of Flutter's ready-made buttons to have full control
       // over the look (glow, pressed colors from design system).
@@ -118,14 +130,26 @@ class _ButtonState extends State<Button> {
             // Glow only on enabled filled buttons
             boxShadow: filled && _enabled ? _glow : null,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.icon != null) Icon(widget.icon, size: 18, color: contentColor),
-              if (widget.icon != null && !iconOnly) const SizedBox(width: AppSpacing.paddingSm),
-              if (!iconOnly) Text(widget.label!, style: AppTextStyles.pBold.copyWith(color: contentColor)),
-            ],
-          ),
+          // Centered and with the label wrapping, for when the button is stretched or narrow (e.g. in Expanded)
+          child: widget.layout == ButtonLayout.vertical && !iconOnly
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: AppSpacing.paddingSm,
+                  children: [
+                    if (widget.icon != null) Icon(widget.icon, size: 24, color: contentColor),
+                    _visibleLabel(AppTextStyles.pSm.copyWith(color: contentColor)),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (widget.icon != null) Icon(widget.icon, size: 18, color: contentColor),
+                    if (widget.icon != null && !iconOnly) const SizedBox(width: AppSpacing.paddingSm),
+                    if (!iconOnly) Flexible(child: _visibleLabel(AppTextStyles.pBold.copyWith(color: contentColor))),
+                  ],
+                ),
         ),
       ),
     );

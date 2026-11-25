@@ -6,6 +6,8 @@ import '../models/track.dart';
 import '../providers/favorites_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/player_provider.dart';
+import '../providers/remix_provider.dart';
+import '../providers/shell_tab_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
@@ -30,6 +32,13 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// Slider position while it's being dragged: the seek happens only on release.
   double? _dragSeconds;
+
+  /// Closes the player on the Create tab, with [track] ready to remix.
+  void _openInCreate(Track track) {
+    ref.read(remixTrackProvider.notifier).select(track);
+    ref.read(shellTabProvider.notifier).select(ShellTab.create);
+    Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +68,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       // Opened only after a track is selected, so track is null only for an instant
       body: track == null
           ? const SizedBox.shrink()
-          : Padding(
+          // Scrolls on small screens and with large text instead of overflowing
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(AppSpacing.paddingLg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -79,31 +89,56 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.paddingLg),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Heading(track.name, style: HeadingStyle.h3, uppercase: false),
-                            Text(
-                              '${track.artistName} · via Jamendo',
-                              style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
-                            ),
-                          ],
+                  Heading(track.name, style: HeadingStyle.h3, uppercase: false),
+                  Text(
+                    '${track.artistName} · via Jamendo',
+                    style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
+                  ),
+                  const SizedBox(height: AppSpacing.paddingMd),
+                  // Equal widths from Expanded, equal heights from IntrinsicHeight (also if a label wraps)
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      // Same gap as the cards in the Home rows
+                      spacing: AppSpacing.paddingMd,
+                      children: [
+                        Expanded(
+                          child: Button(
+                            label: 'Share',
+                            icon: PhosphorIconsRegular.export,
+                            color: ButtonColor.secondary,
+                            variant: ButtonVariant.outline,
+                            layout: ButtonLayout.vertical,
+                            // TODO: share the track
+                            onPressed: () {},
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        isSelected: isLiked,
-                        icon: const Icon(PhosphorIconsRegular.heart),
-                        selectedIcon: const Icon(PhosphorIconsFill.heart, color: AppColors.secondary),
-                        tooltip: isLiked ? 'Remove like' : 'Like',
-                        // Disabled until the saved likes are read
-                        onPressed: favorites == null
-                            ? null
-                            : () => ref.read(favoritesProvider.notifier).toggle(track.id),
-                      ),
-                    ],
+                        Expanded(
+                          child: Button(
+                            label: track.canRemix ? 'Remix' : 'Not allowed',
+                            semanticLabel: track.canRemix ? null : 'Remix not allowed',
+                            icon: PhosphorIconsRegular.waveform,
+                            color: ButtonColor.secondary,
+                            variant: ButtonVariant.outline,
+                            layout: ButtonLayout.vertical,
+                            onPressed: track.canRemix ? () => _openInCreate(track) : null,
+                          ),
+                        ),
+                        Expanded(
+                          child: Button(
+                            label: isLiked ? 'Liked' : 'Like',
+                            icon: isLiked ? PhosphorIconsFill.heart : PhosphorIconsRegular.heart,
+                            color: ButtonColor.secondary,
+                            variant: ButtonVariant.outline,
+                            layout: ButtonLayout.vertical,
+                            // Disabled until the saved likes are read
+                            onPressed: favorites == null
+                                ? null
+                                : () => ref.read(favoritesProvider.notifier).toggle(track.id),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.paddingMd),
                   if (status == PlaybackStatus.error)
