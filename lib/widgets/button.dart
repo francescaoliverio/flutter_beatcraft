@@ -12,7 +12,7 @@ enum ButtonVariant { filled, outline }
 
 /// Button
 /// - With [label]: icon (optional) + text.
-/// - Without [label]: square icon-only button ([icon] required).
+/// - Without [label]: square icon-only button ([icon] required), described to screen readers by [semanticLabel].
 /// - [onPressed] null = disabled, as in Flutter's own buttons.
 
 class Button extends StatefulWidget {
@@ -23,9 +23,13 @@ class Button extends StatefulWidget {
     this.onPressed,
     this.color = ButtonColor.primary,
     this.variant = ButtonVariant.filled,
+    this.semanticLabel,
   }) : assert(label != null || icon != null, 'Button needs a label, an icon, or both');
 
   final String? label;
+
+  /// What screen readers announce for an icon-only button. Ignored when [label] is set.
+  final String? semanticLabel;
   final IconData? icon;
   final VoidCallback? onPressed;
   final ButtonColor color;
@@ -86,7 +90,7 @@ class _ButtonState extends State<Button> {
     return Semantics(
       button: true,
       enabled: _enabled,
-      label: widget.label,
+      label: widget.label ?? widget.semanticLabel,
       // GestureDetector: detects touches on its child.
       // Used instead of Flutter's ready-made buttons to have full control
       // over the look (glow, pressed colors from design system).

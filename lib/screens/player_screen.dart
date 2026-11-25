@@ -3,20 +3,47 @@ import 'package:material_ui/material_ui.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../models/track.dart';
+import '../providers/playback_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/button.dart';
+import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
 
-/// Now playing: cover, track info, progress, controls, remix.
-class PlayerScreen extends ConsumerWidget {
+/// Minutes and seconds, e.g. 3:08.
+String _formatTime(Duration time) {
+  final String seconds = (time.inSeconds % 60).toString().padLeft(2, '0');
+  return '${time.inMinutes}:$seconds';
+}
+
+/// Now playing: cover, track info, progress, controls.
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  /// Slider position while it's being dragged: the seek happens only on release.
+  double? _dragSeconds;
+
+  @override
+  Widget build(BuildContext context) {
     final Track? track = ref.watch(currentTrackProvider).value;
+    final PlaybackState playback = ref.watch(playbackProvider);
+    final PlaybackNotifier controls = ref.read(playbackProvider.notifier);
+
+    // Playback refers to another track only while the restored track hasn't been loaded yet
+    final bool isThisTrack = track != null && playback.trackId == track.id;
+    final PlaybackStatus status = isThisTrack ? playback.status : PlaybackStatus.idle;
+    // A Slider needs max > min: before the track is loaded the bar shows an empty 0..1 range
+    final double maxSeconds = isThisTrack && playback.duration > Duration.zero
+        ? playback.duration.inMilliseconds / 1000
+        : 1;
+    final double seconds = _dragSeconds ?? (isThisTrack ? playback.position.inMilliseconds / 1000 : 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -55,15 +82,36 @@ class PlayerScreen extends ConsumerWidget {
                     style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
                   ),
                   const SizedBox(height: AppSpacing.paddingMd),
-                  // TODO: real position and duration
-                  Slider(value: 0.3, onChanged: (_) {}),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('1:24', style: AppTextStyles.pSm),
-                      Text('3:48', style: AppTextStyles.pSm),
-                    ],
-                  ),
+                  if (status == PlaybackStatus.error)
+                    ErrorBox(
+                      title: "Can't play this track",
+                      description: 'Check your connection and try again.',
+                      onRetry: controls.toggle,
+                    )
+                  else ...[
+                    Slider(
+                      value: seconds.clamp(0.0, maxSeconds),
+                      max: maxSeconds,
+                      // Disabled until the track is loaded
+                      onChanged: isThisTrack && playback.isReady
+                          ? (value) => setState(() => _dragSeconds = value)
+                          : null,
+                      onChangeEnd: (value) {
+                        controls.seek(Duration(milliseconds: (value * 1000).round()));
+                        setState(() => _dragSeconds = null);
+                      },
+                      // Screen readers announce the time instead of a percentage
+                      semanticFormatterCallback: (value) =>
+                          '${_formatTime(Duration(seconds: value.round()))} of ${_formatTime(playback.duration)}',
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(_formatTime(Duration(seconds: seconds.round())), style: AppTextStyles.pSm),
+                        Text(_formatTime(isThisTrack ? playback.duration : Duration.zero), style: AppTextStyles.pSm),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.paddingMd),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -74,7 +122,15 @@ class PlayerScreen extends ConsumerWidget {
                         tooltip: 'Previous',
                         onPressed: () {},
                       ),
-                      Button(icon: PhosphorIconsRegular.play, onPressed: () {}),
+                      Button(
+                        icon: status == PlaybackStatus.playing ? PhosphorIconsRegular.pause : PhosphorIconsRegular.play,
+                        semanticLabel: switch (status) {
+                          PlaybackStatus.playing => 'Pause',
+                          PlaybackStatus.loading => 'Loading',
+                          _ => 'Play',
+                        },
+                        onPressed: status == PlaybackStatus.loading ? null : controls.toggle,
+                      ),
                       IconButton(icon: const Icon(PhosphorIconsRegular.skipForward), tooltip: 'Next', onPressed: () {}),
                     ],
                   ),

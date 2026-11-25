@@ -7,7 +7,7 @@ Individual ITS project: a Flutter app that combines a remix editor, a music play
 - Flutter 3.50, Dart. Targets: Android and iOS only.
 - `material_ui` instead of `package:flutter/material.dart` (Flutter 3.50).
 - Icons: `phosphoricons_flutter`. Do not use `phosphor_flutter`: it extends `IconData`, which is `final` since Flutter 3.44, so it doesn't compile.
-- State: `flutter_riverpod`. Code generation: not decided yet, ask before choosing.
+- State: `flutter_riverpod`, without code generation (Notifier and AsyncNotifier classes).
 - HTTP: `http`.
 
 ## Structure
@@ -50,6 +50,7 @@ lib/
 - Jamendo `headers.next` contains the full URL with `client_id`: never log or show it.
 - Remix allowed only if `audiodownload_allowed` is true and `license_ccurl` is present and not NoDerivatives (`-nd`).
 - Remixes are non-destructive: saved as a project (track id + clips), never as an audio copy of the track.
+- Audio: `flutter_soloud`. Never use `loadUrl`: on Android and iOS it saves the track to a temporary file. Download the bytes with `http` and pass them to `loadMem`, so the track stays in memory only.
 - DummyJSON: demo login, token kept in memory only. Only the user id is saved on the device (`shared_preferences`), to skip the login at launch via `/users/{id}`.
 
 ## Known issues

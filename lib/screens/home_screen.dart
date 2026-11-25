@@ -5,7 +5,7 @@ import '../models/artist.dart';
 import '../models/playlist.dart';
 import '../models/track.dart';
 import '../providers/jamendo_provider.dart';
-import '../providers/player_provider.dart';
+import '../providers/playback_provider.dart';
 import '../services/jamendo_service.dart';
 import '../theme/app_spacing.dart';
 import '../widgets/error_box.dart';
@@ -20,7 +20,7 @@ class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   void _openTrack(BuildContext context, WidgetRef ref, Track track) {
-    ref.read(currentTrackProvider.notifier).select(track);
+    ref.read(playbackProvider.notifier).playTrack(track);
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
   }
 

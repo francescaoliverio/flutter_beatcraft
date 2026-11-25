@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../models/track.dart';
+import '../providers/playback_provider.dart';
 import '../providers/player_provider.dart';
 import '../screens/player_screen.dart';
 import '../theme/app_colors.dart';
@@ -17,6 +18,12 @@ class MiniPlayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Track? track = ref.watch(currentTrackProvider).value;
     if (track == null) return const SizedBox.shrink();
+
+    // select: rebuild only when the status changes, not at every position update
+    final PlaybackStatus status =
+        ref.watch(playbackProvider.select((p) => p.trackId == track.id ? p.status : null)) ?? PlaybackStatus.idle;
+    final bool isPlaying = status == PlaybackStatus.playing;
+    final bool isLoading = status == PlaybackStatus.loading;
 
     void openPlayer() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
 
@@ -73,8 +80,11 @@ class MiniPlayer extends ConsumerWidget {
                 ),
               ),
             ),
-            // TODO: real playback
-            IconButton(icon: const Icon(PhosphorIconsRegular.play), tooltip: 'Play', onPressed: () {}),
+            IconButton(
+              icon: Icon(isPlaying ? PhosphorIconsRegular.pause : PhosphorIconsRegular.play),
+              tooltip: isLoading ? 'Loading' : (isPlaying ? 'Pause' : 'Play'),
+              onPressed: isLoading ? null : ref.read(playbackProvider.notifier).toggle,
+            ),
           ],
         ),
       ),
