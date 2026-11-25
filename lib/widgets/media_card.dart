@@ -9,6 +9,7 @@ enum MediaCardShape { square, circle }
 
 /// Image with a title and an optional subtitle, for tracks, artists and playlists.
 /// Screen readers read it as one item, and as a button only when [onTap] is set.
+/// An optional [imageAction] sits on the top right of the image and is read as a separate control.
 class MediaCard extends StatelessWidget {
   const MediaCard({
     super.key,
@@ -18,6 +19,7 @@ class MediaCard extends StatelessWidget {
     this.shape = MediaCardShape.square,
     this.fallbackImage,
     this.onTap,
+    this.imageAction,
   });
 
   final ImageProvider image;
@@ -29,6 +31,9 @@ class MediaCard extends StatelessWidget {
   final ImageProvider? fallbackImage;
 
   final VoidCallback? onTap;
+
+  /// Small control over the image, e.g. a like button.
+  final Widget? imageAction;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +52,7 @@ class MediaCard extends StatelessWidget {
           fallbackImage != null && provider != fallbackImage ? picture(fallbackImage!) : _emptyImage(),
     );
 
-    return Semantics(
+    final Widget card = Semantics(
       container: true,
       button: onTap != null,
       label: subtitle == null ? title : '$title, $subtitle',
@@ -85,6 +90,15 @@ class MediaCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (imageAction == null) return card;
+    // Outside the card's Semantics, so screen readers don't merge it into the card label
+    return Stack(
+      children: [
+        card,
+        Positioned(top: 0, right: 0, child: imageAction!),
+      ],
     );
   }
 

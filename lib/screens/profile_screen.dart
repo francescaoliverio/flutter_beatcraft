@@ -13,6 +13,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
+import '../widgets/like_button.dart';
 import '../widgets/media_card.dart';
 import '../widgets/media_section.dart';
 import 'player_screen.dart';
@@ -102,6 +103,7 @@ class ProfileScreen extends ConsumerWidget {
                 title: track.name,
                 subtitle: track.artistName,
                 onTap: () => _openTrack(context, ref, track),
+                imageAction: LikeButton(trackId: track.id),
               ),
               errorBuilder: (_) => ErrorBox(
                 title: "Couldn't load your favorites",
