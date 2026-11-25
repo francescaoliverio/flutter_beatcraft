@@ -6,6 +6,7 @@ import '../models/remix_project.dart';
 
 /// Small values kept on the device between launches: ids and remix projects (track id and clip times).
 /// Never tokens, audio or track data.
+/// Last track, favorites and remixes are kept per user, so several users can share the device.
 class LocalStorage {
   LocalStorage(this._prefs);
 
@@ -16,11 +17,12 @@ class LocalStorage {
   static const String _favoriteTrackIdsKey = 'favorite_track_ids';
   static const String _remixProjectsKey = 'remix_projects';
 
-  Future<String?> readLastTrackId() => _prefs.getString(_lastTrackIdKey);
+  /// Key of [userId]'s own copy of a value, e.g. favorite_track_ids_5.
+  static String _ofUser(String key, int userId) => '${key}_$userId';
 
-  Future<void> saveLastTrackId(String id) => _prefs.setString(_lastTrackIdKey, id);
+  Future<String?> readLastTrackId(int userId) => _prefs.getString(_ofUser(_lastTrackIdKey, userId));
 
-  Future<void> clearLastTrackId() => _prefs.remove(_lastTrackIdKey);
+  Future<void> saveLastTrackId(int userId, String id) => _prefs.setString(_ofUser(_lastTrackIdKey, userId), id);
 
   Future<int?> readUserId() => _prefs.getInt(_userIdKey);
 
@@ -29,13 +31,15 @@ class LocalStorage {
   Future<void> clearUserId() => _prefs.remove(_userIdKey);
 
   /// Liked tracks, newest first.
-  Future<List<String>> readFavoriteTrackIds() async => await _prefs.getStringList(_favoriteTrackIdsKey) ?? [];
+  Future<List<String>> readFavoriteTrackIds(int userId) async =>
+      await _prefs.getStringList(_ofUser(_favoriteTrackIdsKey, userId)) ?? [];
 
-  Future<void> saveFavoriteTrackIds(List<String> ids) => _prefs.setStringList(_favoriteTrackIdsKey, ids);
+  Future<void> saveFavoriteTrackIds(int userId, List<String> ids) =>
+      _prefs.setStringList(_ofUser(_favoriteTrackIdsKey, userId), ids);
 
   /// Saved remixes, one JSON string each. A project that can't be read is skipped.
-  Future<List<RemixProject>> readRemixProjects() async {
-    final List<String> saved = await _prefs.getStringList(_remixProjectsKey) ?? [];
+  Future<List<RemixProject>> readRemixProjects(int userId) async {
+    final List<String> saved = await _prefs.getStringList(_ofUser(_remixProjectsKey, userId)) ?? [];
     final List<RemixProject> projects = [];
     for (final String json in saved) {
       try {
@@ -49,6 +53,8 @@ class LocalStorage {
     return projects;
   }
 
-  Future<void> saveRemixProjects(List<RemixProject> projects) =>
-      _prefs.setStringList(_remixProjectsKey, projects.map((project) => jsonEncode(project.toJson())).toList());
+  Future<void> saveRemixProjects(int userId, List<RemixProject> projects) => _prefs.setStringList(
+    _ofUser(_remixProjectsKey, userId),
+    projects.map((project) => jsonEncode(project.toJson())).toList(),
+  );
 }

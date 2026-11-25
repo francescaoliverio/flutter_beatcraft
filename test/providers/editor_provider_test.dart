@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/models/timeline_clip.dart';
+import 'package:flutter_beatcraft/providers/auth_provider.dart';
 import 'package:flutter_beatcraft/providers/editor_provider.dart';
 import 'package:flutter_beatcraft/providers/jamendo_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
@@ -34,6 +35,7 @@ void main() {
         audioEngineProvider.overrideWithValue(playerEngine),
         editorEngineProvider.overrideWithValue(editorEngine),
         localStorageProvider.overrideWithValue(storage),
+        loggedUserIdProvider.overrideWithValue(1),
       ],
     );
     await container.read(currentTrackProvider.future);
@@ -225,7 +227,7 @@ void main() {
 
       await editor.save();
 
-      final RemixProject saved = storage.remixProjects.single;
+      final RemixProject saved = storage.remixProjects[1]!.single;
       expect((saved.name, saved.trackId, saved.clips.length), ('Night remix', '1', 1));
       expect(container.read(editorProvider).value!.projectId, saved.id);
       expect(container.read(editorProvider).value!.hasUnsavedChanges, isFalse);
@@ -237,7 +239,7 @@ void main() {
 
       // Saving again updates the same project
       await editor.save();
-      expect(storage.remixProjects.single.clips, hasLength(2));
+      expect(storage.remixProjects[1]!.single.clips, hasLength(2));
     });
 
     /// A saved project of the track in [trackJson], with one clip.
@@ -258,6 +260,7 @@ void main() {
           audioEngineProvider.overrideWithValue(playerEngine),
           editorEngineProvider.overrideWithValue(editorEngine),
           localStorageProvider.overrideWithValue(storage),
+          loggedUserIdProvider.overrideWithValue(1),
           jamendoServiceProvider.overrideWithValue(
             JamendoService(MockClient((_) async => http.Response(body(results: [json]), 200)), 'test-id'),
           ),

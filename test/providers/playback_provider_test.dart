@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/models/timeline_clip.dart';
 import 'package:flutter_beatcraft/models/track.dart';
+import 'package:flutter_beatcraft/providers/auth_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_beatcraft/providers/playback_provider.dart';
 import 'package:flutter_beatcraft/providers/player_provider.dart';
@@ -15,9 +16,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// In-memory storage, so tests don't touch the device preferences.
 class FakeLocalStorage implements LocalStorage {
   int? userId;
-  String? lastTrackId;
-  List<String> favoriteTrackIds = [];
-  List<RemixProject> remixProjects = [];
+
+  /// Per-user values, keyed by user id.
+  final Map<int, String> lastTrackIds = {};
+  final Map<int, List<String>> favoriteTrackIds = {};
+  final Map<int, List<RemixProject>> remixProjects = {};
 
   @override
   Future<int?> readUserId() async => userId;
@@ -29,25 +32,22 @@ class FakeLocalStorage implements LocalStorage {
   Future<void> clearUserId() async => userId = null;
 
   @override
-  Future<String?> readLastTrackId() async => lastTrackId;
+  Future<String?> readLastTrackId(int userId) async => lastTrackIds[userId];
 
   @override
-  Future<void> saveLastTrackId(String id) async => lastTrackId = id;
+  Future<void> saveLastTrackId(int userId, String id) async => lastTrackIds[userId] = id;
 
   @override
-  Future<void> clearLastTrackId() async => lastTrackId = null;
+  Future<List<String>> readFavoriteTrackIds(int userId) async => favoriteTrackIds[userId] ?? [];
 
   @override
-  Future<List<String>> readFavoriteTrackIds() async => favoriteTrackIds;
+  Future<void> saveFavoriteTrackIds(int userId, List<String> ids) async => favoriteTrackIds[userId] = ids;
 
   @override
-  Future<void> saveFavoriteTrackIds(List<String> ids) async => favoriteTrackIds = ids;
+  Future<List<RemixProject>> readRemixProjects(int userId) async => remixProjects[userId] ?? [];
 
   @override
-  Future<List<RemixProject>> readRemixProjects() async => remixProjects;
-
-  @override
-  Future<void> saveRemixProjects(List<RemixProject> projects) async => remixProjects = projects;
+  Future<void> saveRemixProjects(int userId, List<RemixProject> projects) async => remixProjects[userId] = projects;
 }
 
 /// Engine without audio: every load waits until the test calls [finish] or [fail].
@@ -124,7 +124,11 @@ void main() {
     engine = FakeAudioEngine();
     storage = FakeLocalStorage();
     container = ProviderContainer.test(
-      overrides: [audioEngineProvider.overrideWithValue(engine), localStorageProvider.overrideWithValue(storage)],
+      overrides: [
+        audioEngineProvider.overrideWithValue(engine),
+        localStorageProvider.overrideWithValue(storage),
+        loggedUserIdProvider.overrideWithValue(1),
+      ],
     );
     // No saved track: the current track starts as null without calling Jamendo
     await container.read(currentTrackProvider.future);
@@ -144,7 +148,7 @@ void main() {
       expect(state.status, PlaybackStatus.playing);
       expect(state.duration, const Duration(minutes: 3));
       expect(engine.isPlaying, isTrue);
-      expect(storage.lastTrackId, '1');
+      expect(storage.lastTrackIds[1], '1');
     });
 
     test('toggle pauses and resumes', () async {

@@ -1,3 +1,4 @@
+import 'package:flutter_beatcraft/providers/auth_provider.dart';
 import 'package:flutter_beatcraft/providers/favorites_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,8 +11,10 @@ void main() {
   late ProviderContainer container;
 
   setUp(() {
-    storage = FakeLocalStorage()..favoriteTrackIds = ['1'];
-    container = ProviderContainer.test(overrides: [localStorageProvider.overrideWithValue(storage)]);
+    storage = FakeLocalStorage()..favoriteTrackIds[1] = ['1'];
+    container = ProviderContainer.test(
+      overrides: [localStorageProvider.overrideWithValue(storage), loggedUserIdProvider.overrideWithValue(1)],
+    );
   });
 
   test('starts from the saved likes', () async {
@@ -24,7 +27,7 @@ void main() {
     await container.read(favoritesProvider.notifier).toggle('2');
 
     expect(container.read(favoritesProvider).value, ['2', '1']);
-    expect(storage.favoriteTrackIds, ['2', '1']);
+    expect(storage.favoriteTrackIds[1], ['2', '1']);
   });
 
   test('liking again removes the like', () async {
@@ -33,6 +36,6 @@ void main() {
     await container.read(favoritesProvider.notifier).toggle('1');
 
     expect(container.read(favoritesProvider).value, isEmpty);
-    expect(storage.favoriteTrackIds, isEmpty);
+    expect(storage.favoriteTrackIds[1], isEmpty);
   });
 }

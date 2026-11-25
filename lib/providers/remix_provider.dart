@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/remix_project.dart';
 import '../models/track.dart';
+import 'auth_provider.dart';
 import 'local_storage_provider.dart';
 
 /// What Create opens: a new remix of [track], or a saved [project].
@@ -15,9 +16,13 @@ class RemixRequest {
 }
 
 /// Set by the Remix button in the player and by the saved remixes in the profile. Null until one is chosen.
+/// Back to null when the user changes, which also closes the editor and stops its timeline.
 class RemixNotifier extends Notifier<RemixRequest?> {
   @override
-  RemixRequest? build() => null;
+  RemixRequest? build() {
+    ref.watch(loggedUserIdProvider);
+    return null;
+  }
 
   void newRemix(Track track) => state = RemixRequest.newRemix(track);
 
@@ -26,11 +31,13 @@ class RemixNotifier extends Notifier<RemixRequest?> {
 
 final remixProvider = NotifierProvider<RemixNotifier, RemixRequest?>(RemixNotifier.new);
 
-/// Saved remixes, last modified first.
+/// The logged user's saved remixes, last modified first. Empty when logged out.
 class RemixProjectsNotifier extends AsyncNotifier<List<RemixProject>> {
   @override
   Future<List<RemixProject>> build() async {
-    final List<RemixProject> projects = await ref.read(localStorageProvider).readRemixProjects();
+    final int? userId = ref.watch(loggedUserIdProvider);
+    if (userId == null) return [];
+    final List<RemixProject> projects = await ref.read(localStorageProvider).readRemixProjects(userId);
     return projects..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
@@ -46,8 +53,10 @@ class RemixProjectsNotifier extends AsyncNotifier<List<RemixProject>> {
   }
 
   Future<void> _update(List<RemixProject> projects) async {
+    final int? userId = ref.read(loggedUserIdProvider);
+    if (userId == null) return;
     state = AsyncData(projects);
-    await ref.read(localStorageProvider).saveRemixProjects(projects);
+    await ref.read(localStorageProvider).saveRemixProjects(userId, projects);
   }
 }
 

@@ -1,52 +1,15 @@
 import 'dart:convert';
 
-import 'package:flutter_beatcraft/models/remix_project.dart';
 import 'package:flutter_beatcraft/providers/auth_provider.dart';
+import 'package:flutter_beatcraft/providers/favorites_provider.dart';
 import 'package:flutter_beatcraft/providers/local_storage_provider.dart';
 import 'package:flutter_beatcraft/services/auth_service.dart';
-import 'package:flutter_beatcraft/services/local_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-/// In-memory storage, so tests don't touch the device preferences.
-class FakeLocalStorage implements LocalStorage {
-  int? userId;
-  String? lastTrackId;
-  List<String> favoriteTrackIds = [];
-  List<RemixProject> remixProjects = [];
-
-  @override
-  Future<int?> readUserId() async => userId;
-
-  @override
-  Future<void> saveUserId(int id) async => userId = id;
-
-  @override
-  Future<void> clearUserId() async => userId = null;
-
-  @override
-  Future<String?> readLastTrackId() async => lastTrackId;
-
-  @override
-  Future<void> saveLastTrackId(String id) async => lastTrackId = id;
-
-  @override
-  Future<void> clearLastTrackId() async => lastTrackId = null;
-
-  @override
-  Future<List<String>> readFavoriteTrackIds() async => favoriteTrackIds;
-
-  @override
-  Future<void> saveFavoriteTrackIds(List<String> ids) async => favoriteTrackIds = ids;
-
-  @override
-  Future<List<RemixProject>> readRemixProjects() async => remixProjects;
-
-  @override
-  Future<void> saveRemixProjects(List<RemixProject> projects) async => remixProjects = projects;
-}
+import 'playback_provider_test.dart' show FakeLocalStorage;
 
 const Map<String, Object> emily = {
   'id': 1,
@@ -111,16 +74,35 @@ void main() {
       expect(container.read(authProvider).value, isNull);
     });
 
-    test('logout forgets the last track, so the next user does not see it', () async {
+    test('logout hides the user data and keeps it for the next login', () async {
       final storage = FakeLocalStorage()
         ..userId = 1
-        ..lastTrackId = '2353774';
+        ..favoriteTrackIds[1] = ['2353774'];
       final container = containerWith(storage);
       await container.read(authProvider.future);
+      expect(container.read(loggedUserIdProvider), 1);
+      expect(await container.read(favoritesProvider.future), ['2353774']);
 
       await container.read(authProvider.notifier).logout();
 
-      expect(storage.lastTrackId, isNull);
+      expect(container.read(loggedUserIdProvider), isNull);
+      expect(await container.read(favoritesProvider.future), isEmpty);
+      expect(storage.favoriteTrackIds[1], ['2353774']);
+
+      await container.read(authProvider.notifier).login('emilys', 'emilyspass');
+
+      expect(await container.read(favoritesProvider.future), ['2353774']);
+    });
+
+    test('each user sees only their own favorites', () async {
+      final storage = FakeLocalStorage()
+        ..userId = 1
+        ..favoriteTrackIds[1] = ['1']
+        ..favoriteTrackIds[2] = ['2'];
+      final container = containerWith(storage);
+      await container.read(authProvider.future);
+
+      expect(await container.read(favoritesProvider.future), ['1']);
     });
   });
 }

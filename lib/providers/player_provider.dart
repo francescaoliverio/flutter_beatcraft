@@ -2,15 +2,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/track.dart';
 import '../services/jamendo_service.dart';
+import 'auth_provider.dart';
 import 'jamendo_provider.dart';
 import 'local_storage_provider.dart';
 
-/// Track shown in the player and mini player: null when nothing was played yet.
-/// Only its id is saved on the device; at launch the track is fetched again from Jamendo.
+/// Track shown in the player and mini player: null when nothing was played yet or logged out.
+/// Only its id is saved on the device, per user; at launch the track is fetched again from Jamendo.
 class CurrentTrackNotifier extends AsyncNotifier<Track?> {
   @override
   Future<Track?> build() async {
-    final String? id = await ref.read(localStorageProvider).readLastTrackId();
+    final int? userId = ref.watch(loggedUserIdProvider);
+    if (userId == null) return null;
+    final String? id = await ref.read(localStorageProvider).readLastTrackId(userId);
     if (id == null) return null;
     try {
       return await ref.read(jamendoServiceProvider).trackById(id);
@@ -22,13 +25,8 @@ class CurrentTrackNotifier extends AsyncNotifier<Track?> {
 
   Future<void> select(Track track) async {
     state = AsyncData(track);
-    await ref.read(localStorageProvider).saveLastTrackId(track.id);
-  }
-
-  /// Nothing selected, also at the next launch. Used at logout, so the next user doesn't see this track.
-  Future<void> clear() async {
-    state = const AsyncData(null);
-    await ref.read(localStorageProvider).clearLastTrackId();
+    final int? userId = ref.read(loggedUserIdProvider);
+    if (userId != null) await ref.read(localStorageProvider).saveLastTrackId(userId, track.id);
   }
 }
 
