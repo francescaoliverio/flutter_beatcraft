@@ -317,6 +317,14 @@ class _TimelineState extends State<_Timeline> {
     return longest + _editor.trackLength * 0.25;
   }
 
+  /// Playhead value read by screen readers, kept between 0 and the end like a seek does.
+  String _playheadValue(Duration position) {
+    final Duration clamped = position < Duration.zero
+        ? Duration.zero
+        : (position > _editor.length ? _editor.length : position);
+    return '${_formatTime(clamped)} of ${_formatTime(_editor.length)}';
+  }
+
   /// Clips with the dragged one at its preview position.
   List<TimelineClip> get _shownClips => _dragClipId == null
       ? _editor.clips
@@ -415,7 +423,10 @@ class _TimelineState extends State<_Timeline> {
         return Semantics(
           container: true,
           label: 'Timeline, playhead',
-          value: '${_formatTime(_editor.position)} of ${_formatTime(_editor.length)}',
+          value: _playheadValue(_editor.position),
+          // Both or neither: with a value, Flutter requires the values after increase and decrease
+          increasedValue: _playheadValue(_editor.position + _playheadStep),
+          decreasedValue: _playheadValue(_editor.position - _playheadStep),
           onIncrease: () => widget.controls.seek(_editor.position + _playheadStep),
           onDecrease: () => widget.controls.seek(_editor.position - _playheadStep),
           child: GestureDetector(
@@ -474,6 +485,12 @@ class _TimelinePainter extends CustomPainter {
   final ValueChanged<int?> onSelect;
   final void Function(TimelineClip clip, Duration step) onNudge;
   final Duration nudgeStep;
+
+  /// Clip value read by screen readers after moving it by [step].
+  String _clipValue(TimelineClip clip, Duration step) {
+    final Duration start = clip.timelineStart + step < Duration.zero ? Duration.zero : clip.timelineStart + step;
+    return '${_formatTime(start)} to ${_formatTime(start + clip.length)}';
+  }
 
   /// Horizontal distance between waveform bars.
   static const double _barStep = 3;
@@ -586,6 +603,8 @@ class _TimelinePainter extends CustomPainter {
             properties: SemanticsProperties(
               label: 'Clip ${i + 1}',
               value: '${_formatTime(clip.timelineStart)} to ${_formatTime(clip.timelineEnd)}',
+              increasedValue: _clipValue(clip, nudgeStep),
+              decreasedValue: _clipValue(clip, -nudgeStep),
               hint: 'Swipe up or down to move it by one second',
               selected: clip.id == selectedClipId,
               button: true,
