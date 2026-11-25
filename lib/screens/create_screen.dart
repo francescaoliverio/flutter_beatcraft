@@ -243,7 +243,8 @@ class _Editor extends ConsumerWidget {
         Text(
           editor.clips.isEmpty
               ? 'No clips left. Undo to bring them back.'
-              : 'Tap a clip to select it, drag it to move it. Dropped on another clip, it is inserted there.',
+              : 'Tap a clip to select it, drag it to move it. Dropped on another clip, it is inserted there. '
+                    'Pinch to zoom, two fingers to scroll.',
           style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight),
         ),
       ],
@@ -277,7 +278,8 @@ class _Tool extends StatelessWidget {
 
 /// Ruler, clips with their waveform and the playhead.
 /// Tap: moves the playhead and selects the clip under the finger.
-/// Drag a clip: moves it. Drag elsewhere: moves the playhead.
+/// Drag a clip: moves it. Drag elsewhere, on the ruler or near the playhead: moves the playhead.
+/// Two fingers: pinch to zoom, move together to scroll.
 class _Timeline extends StatefulWidget {
   const _Timeline({required this.editor, required this.controls});
 
@@ -295,11 +297,29 @@ class _TimelineState extends State<_Timeline> {
   /// Distance in px within which a dragged clip snaps to 0, the playhead or the edges of other clips.
   static const double _snapDistance = 12;
 
+  /// Distance in px from the playhead line within which a drag moves the playhead, also over a clip.
+  static const double _playheadGrab = 20;
+
+  /// Closest zoom: this much time across the whole width.
+  static const Duration _minSpan = Duration(seconds: 1);
+
+  /// Zoom step of the + and − buttons.
+  static const double _zoomStep = 2;
+
   /// Playhead step for screen reader swipes up and down.
   static const Duration _playheadStep = Duration(seconds: 5);
 
   /// Clip step for screen reader swipes up and down on a clip.
   static const Duration _clipStep = Duration(seconds: 1);
+
+  /// Visible time across the width, null when the whole timeline fits.
+  Duration? _span;
+
+  /// Time at the left edge.
+  Duration _offset = Duration.zero;
+
+  /// Width of the timeline at the last build, for the gesture callbacks.
+  double _width = 1;
 
   /// Clip being dragged and where it would land. Applied to the remix only when the finger lifts.
   int? _dragClipId;
@@ -308,18 +328,67 @@ class _TimelineState extends State<_Timeline> {
   /// Time between the clip start and the finger when the drag began.
   Duration _grabOffset = Duration.zero;
 
-  /// Timeline scale frozen during a drag, so the timeline doesn't rescale under the finger.
-  double? _dragPxPerMs;
+  /// Fingers on the timeline, to recognise a pinch.
+  final Map<int, Offset> _pointers = {};
 
-  /// Latest start that keeps the dragged clip inside the visible timeline.
-  Duration _dragMaxStart = Duration.zero;
+  /// True from the second finger down until every finger is up: one-finger gestures are ignored meanwhile.
+  bool _pinched = false;
 
   EditorState get _editor => widget.editor;
 
-  /// The visible timeline: the longer of track and remix, plus a quarter of the track of free space to drag into.
+  /// The whole timeline: the longer of track and remix, plus a quarter of the track of free space to drag into.
   Duration get _viewLength {
     final Duration longest = _editor.length > _editor.trackLength ? _editor.length : _editor.trackLength;
     return longest + _editor.trackLength * 0.25;
+  }
+
+  Duration get _visible {
+    final Duration? span = _span;
+    return span == null || span > _viewLength ? _viewLength : span;
+  }
+
+  double get _pxPerMs => _width / max(1, _visible.inMilliseconds);
+
+  Duration _timeAt(double x) => Duration(milliseconds: max(0, _offset.inMilliseconds + x / _pxPerMs).round());
+
+  double _xOf(Duration time) => (time - _offset).inMilliseconds * _pxPerMs;
+
+  Duration _clampOffset(Duration offset) {
+    final Duration maxOffset = _viewLength - _visible;
+    if (offset < Duration.zero || maxOffset <= Duration.zero) return Duration.zero;
+    return offset > maxOffset ? maxOffset : offset;
+  }
+
+  /// Zooms by [factor] (above 1: closer) keeping the time under [focalX] in place.
+  void _zoom(double factor, double focalX) {
+    final double focalMs = _offset.inMilliseconds + focalX / _pxPerMs;
+    final int viewMs = _viewLength.inMilliseconds;
+    final int spanMs = (_visible.inMilliseconds / factor).round().clamp(
+      _minSpan.inMilliseconds,
+      max(viewMs, _minSpan.inMilliseconds),
+    );
+    _span = spanMs >= viewMs ? null : Duration(milliseconds: spanMs);
+    _offset = _clampOffset(Duration(milliseconds: (focalMs - focalX * spanMs / _width).round()));
+  }
+
+  /// Zoom buttons: around the playhead if it is visible, otherwise around the middle.
+  void _zoomButton(double factor) {
+    final double playheadX = _xOf(_editor.position);
+    setState(() => _zoom(factor, playheadX >= 0 && playheadX <= _width ? playheadX : _width / 2));
+  }
+
+  bool get _canZoomIn => _visible > _minSpan;
+
+  bool get _canZoomOut => _span != null && _span! < _viewLength;
+
+  @override
+  void didUpdateWidget(_Timeline old) {
+    super.didUpdateWidget(old);
+    // While playing, the view follows the playhead when it leaves the screen
+    if (_editor.isPlaying && _span != null) {
+      final double x = _xOf(_editor.position);
+      if (x < 0 || x > _width) _offset = _clampOffset(_editor.position - _visible * 0.1);
+    }
   }
 
   /// Where the dragged clip would be inserted if dropped now, null if it would stay where it is.
@@ -346,8 +415,6 @@ class _TimelineState extends State<_Timeline> {
             if (clip.id == _dragClipId) clip.copyWith(timelineStart: _dragStart) else clip,
         ];
 
-  Duration _timeAt(double x, double pxPerMs) => Duration(milliseconds: max(0, x / pxPerMs).round());
-
   /// The selected clip if it is under [time], otherwise the topmost clip there.
   TimelineClip? _clipAt(Duration time) {
     final TimelineClip? selected = _editor.selectedClip;
@@ -355,15 +422,57 @@ class _TimelineState extends State<_Timeline> {
     return _editor.clips.reversed.where((clip) => clip.covers(time)).firstOrNull;
   }
 
-  void _onTapUp(TapUpDetails details, double pxPerMs) {
-    final Duration time = _timeAt(details.localPosition.dx, pxPerMs);
+  // Pinch, read from raw pointers so one-finger drags don't wait for a pinch to be ruled out
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointers.isEmpty) _pinched = false;
+    _pointers[event.pointer] = event.localPosition;
+    if (_pointers.length == 2) {
+      // A clip drag in progress is dropped where it started
+      setState(() {
+        _pinched = true;
+        _dragClipId = null;
+      });
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    if (_pointers.length != 2) {
+      _pointers[event.pointer] = event.localPosition;
+      return;
+    }
+    final List<Offset> before = _pointers.values.toList();
+    _pointers[event.pointer] = event.localPosition;
+    final List<Offset> after = _pointers.values.toList();
+    final double distanceBefore = (before[0] - before[1]).distance;
+    final double distanceAfter = (after[0] - after[1]).distance;
+    final double focalBefore = (before[0].dx + before[1].dx) / 2;
+    final double focalAfter = (after[0].dx + after[1].dx) / 2;
+    setState(() {
+      if (distanceBefore > 0 && distanceAfter > 0) _zoom(distanceAfter / distanceBefore, focalBefore);
+      // Both fingers moving together scroll the timeline
+      _offset = _clampOffset(_offset - Duration(milliseconds: ((focalAfter - focalBefore) / _pxPerMs).round()));
+    });
+  }
+
+  void _onPointerUp(PointerEvent event) => _pointers.remove(event.pointer);
+
+  // One-finger gestures
+
+  void _onTapUp(TapUpDetails details) {
+    if (_pinched) return;
+    final Duration time = _timeAt(details.localPosition.dx);
     if (details.localPosition.dy > _rulerHeight) widget.controls.select(_clipAt(time)?.id);
     widget.controls.seek(time);
   }
 
-  void _onDragStart(DragStartDetails details, double pxPerMs, double width) {
-    if (details.localPosition.dy <= _rulerHeight) return;
-    final Duration time = _timeAt(details.localPosition.dx, pxPerMs);
+  void _onDragStart(DragStartDetails details) {
+    if (_pinched) return;
+    final Offset point = details.localPosition;
+    final bool onPlayhead = (point.dx - _xOf(_editor.position)).abs() <= _playheadGrab;
+    if (point.dy <= _rulerHeight || onPlayhead) return;
+    final Duration time = _timeAt(point.dx);
     final TimelineClip? clip = _clipAt(time);
     if (clip == null) return;
     widget.controls.select(clip.id);
@@ -371,36 +480,32 @@ class _TimelineState extends State<_Timeline> {
       _dragClipId = clip.id;
       _dragStart = clip.timelineStart;
       _grabOffset = time - clip.timelineStart;
-      _dragPxPerMs = pxPerMs;
-      final Duration maxStart = _timeAt(width, pxPerMs) - clip.length;
-      _dragMaxStart = maxStart < Duration.zero ? Duration.zero : maxStart;
     });
   }
 
-  void _onDragUpdate(DragUpdateDetails details, double pxPerMs) {
-    final double? dragPxPerMs = _dragPxPerMs;
-    if (dragPxPerMs == null) {
-      widget.controls.seek(_timeAt(details.localPosition.dx, pxPerMs));
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_pinched) return;
+    final int? clipId = _dragClipId;
+    if (clipId == null) {
+      widget.controls.seek(_timeAt(details.localPosition.dx));
       return;
     }
-    final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == _dragClipId);
-    final Duration wanted = _timeAt(details.localPosition.dx, dragPxPerMs) - _grabOffset;
-    final Duration inside = wanted < Duration.zero ? Duration.zero : (wanted > _dragMaxStart ? _dragMaxStart : wanted);
-    setState(() => _dragStart = _snap(clip, inside, dragPxPerMs));
+    final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == clipId);
+    final Duration wanted = _timeAt(details.localPosition.dx) - _grabOffset;
+    final Duration maxStart = _viewLength - clip.length;
+    final Duration inside = wanted < Duration.zero ? Duration.zero : (wanted > maxStart ? maxStart : wanted);
+    setState(() => _dragStart = _snap(clip, inside));
   }
 
   void _onDragEnd() {
     final int? clipId = _dragClipId;
     if (clipId == null) return;
-    widget.controls.move(clipId, _dragStart);
-    setState(() {
-      _dragClipId = null;
-      _dragPxPerMs = null;
-    });
+    if (!_pinched) widget.controls.move(clipId, _dragStart);
+    setState(() => _dragClipId = null);
   }
 
   /// Moves [start] onto a nearby edge, so clips can sit back to back without gaps.
-  Duration _snap(TimelineClip clip, Duration start, double pxPerMs) {
+  Duration _snap(TimelineClip clip, Duration start) {
     final List<Duration> edges = [
       Duration.zero,
       _editor.position,
@@ -411,7 +516,7 @@ class _TimelineState extends State<_Timeline> {
     Duration best = start;
     double bestDistance = _snapDistance;
     void consider(Duration candidate, Duration gap) {
-      final double distance = gap.inMilliseconds.abs() * pxPerMs;
+      final double distance = gap.inMilliseconds.abs() * _pxPerMs;
       if (candidate >= Duration.zero && distance < bestDistance) {
         bestDistance = distance;
         best = candidate;
@@ -428,47 +533,75 @@ class _TimelineState extends State<_Timeline> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double width = constraints.maxWidth;
-        final double pxPerMs = _dragPxPerMs ?? width / max(1, _viewLength.inMilliseconds);
-
-        return Semantics(
-          container: true,
-          label: 'Timeline, playhead',
-          value: _playheadValue(_editor.position),
-          // Both or neither: with a value, Flutter requires the values after increase and decrease
-          increasedValue: _playheadValue(_editor.position + _playheadStep),
-          decreasedValue: _playheadValue(_editor.position - _playheadStep),
-          onIncrease: () => widget.controls.seek(_editor.position + _playheadStep),
-          onDecrease: () => widget.controls.seek(_editor.position - _playheadStep),
-          child: GestureDetector(
-            // Screen readers use the explicit actions of the timeline and of each clip instead
-            excludeFromSemantics: true,
-            onTapUp: (details) => _onTapUp(details, pxPerMs),
-            onHorizontalDragStart: (details) => _onDragStart(details, pxPerMs, width),
-            onHorizontalDragUpdate: (details) => _onDragUpdate(details, pxPerMs),
-            onHorizontalDragEnd: (_) => _onDragEnd(),
-            onHorizontalDragCancel: _onDragEnd,
-            child: CustomPaint(
-              size: Size(width, _rulerHeight + _laneHeight),
-              painter: _TimelinePainter(
-                clips: _shownClips,
-                selectedClipId: _editor.selectedClipId,
-                waveform: _editor.waveform,
-                trackLength: _editor.trackLength,
-                pxPerMs: pxPerMs,
-                position: _editor.position,
-                rulerHeight: _rulerHeight,
-                onSelect: widget.controls.select,
-                insertAt: _insertAt,
-                onNudge: (clip, step) => widget.controls.nudge(clip.id, step),
-                nudgeStep: _clipStep,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            IconButton(
+              icon: const Icon(PhosphorIconsRegular.magnifyingGlassMinus),
+              tooltip: 'Zoom out',
+              onPressed: _canZoomOut ? () => _zoomButton(1 / _zoomStep) : null,
             ),
-          ),
-        );
-      },
+            IconButton(
+              icon: const Icon(PhosphorIconsRegular.magnifyingGlassPlus),
+              tooltip: 'Zoom in',
+              onPressed: _canZoomIn ? () => _zoomButton(_zoomStep) : null,
+            ),
+          ],
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            _width = max(1, constraints.maxWidth);
+            // The timeline may have become shorter since the last build
+            _offset = _clampOffset(_offset);
+
+            return Semantics(
+              container: true,
+              label: 'Timeline, playhead',
+              value: _playheadValue(_editor.position),
+              // Both or neither: with a value, Flutter requires the values after increase and decrease
+              increasedValue: _playheadValue(_editor.position + _playheadStep),
+              decreasedValue: _playheadValue(_editor.position - _playheadStep),
+              onIncrease: () => widget.controls.seek(_editor.position + _playheadStep),
+              onDecrease: () => widget.controls.seek(_editor.position - _playheadStep),
+              child: Listener(
+                onPointerDown: _onPointerDown,
+                onPointerMove: _onPointerMove,
+                onPointerUp: _onPointerUp,
+                onPointerCancel: _onPointerUp,
+                child: GestureDetector(
+                  // Screen readers use the explicit actions of the timeline and of each clip instead
+                  excludeFromSemantics: true,
+                  onTapUp: _onTapUp,
+                  onHorizontalDragStart: _onDragStart,
+                  onHorizontalDragUpdate: _onDragUpdate,
+                  onHorizontalDragEnd: (_) => _onDragEnd(),
+                  onHorizontalDragCancel: _onDragEnd,
+                  child: CustomPaint(
+                    size: Size(_width, _rulerHeight + _laneHeight),
+                    painter: _TimelinePainter(
+                      clips: _shownClips,
+                      selectedClipId: _editor.selectedClipId,
+                      waveform: _editor.waveform,
+                      trackLength: _editor.trackLength,
+                      pxPerMs: _pxPerMs,
+                      offset: _offset,
+                      position: _editor.position,
+                      rulerHeight: _rulerHeight,
+                      insertAt: _insertAt,
+                      onSelect: widget.controls.select,
+                      onNudge: (clip, step) => widget.controls.nudge(clip.id, step),
+                      nudgeStep: _clipStep,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -480,6 +613,7 @@ class _TimelinePainter extends CustomPainter {
     required this.waveform,
     required this.trackLength,
     required this.pxPerMs,
+    required this.offset,
     required this.position,
     required this.rulerHeight,
     required this.insertAt,
@@ -490,9 +624,16 @@ class _TimelinePainter extends CustomPainter {
 
   final List<TimelineClip> clips;
   final int? selectedClipId;
+
+  /// Loudness of the whole track, from 0 to 1, with the loudest point at 1.
   final Float32List waveform;
+
   final Duration trackLength;
   final double pxPerMs;
+
+  /// Time at the left edge.
+  final Duration offset;
+
   final Duration position;
   final double rulerHeight;
 
@@ -515,12 +656,17 @@ class _TimelinePainter extends CustomPainter {
 
   static const Radius _radius = Radius.circular(AppSpacing.radiusMd);
 
-  Rect _clipRect(TimelineClip clip, Size size) => Rect.fromLTRB(
-    clip.timelineStart.inMilliseconds * pxPerMs,
-    rulerHeight,
-    clip.timelineEnd.inMilliseconds * pxPerMs,
-    size.height,
-  );
+  /// Possible distances between ruler ticks, in ms. Each label step is a multiple of the tick step it goes with.
+  static const List<int> _rulerSteps = [100, 500, 1000, 5000, 10000, 30000, 60000, 300000];
+
+  /// Smallest distance in px between two ticks, and between two labels.
+  static const double _minTickGap = 8;
+  static const double _minLabelGap = 64;
+
+  double _x(Duration time) => (time - offset).inMilliseconds * pxPerMs;
+
+  Rect _clipRect(TimelineClip clip, Size size) =>
+      Rect.fromLTRB(_x(clip.timelineStart), rulerHeight, _x(clip.timelineEnd), size.height);
 
   /// Clips in drawing order, the selected one last so it is on top.
   Iterable<TimelineClip> get _ordered => [
@@ -531,15 +677,16 @@ class _TimelinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (trackLength <= Duration.zero) return;
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     _paintRuler(canvas, size);
-    // The loudest point fills the clip height
-    final double peak = waveform.isEmpty ? 1 : max(waveform.reduce(max), 0.0001);
     for (final TimelineClip clip in _ordered) {
-      _paintClip(canvas, size, clip, peak);
+      final Rect rect = _clipRect(clip, size);
+      if (rect.right >= 0 && rect.left <= size.width) _paintClip(canvas, size, clip, rect);
     }
     final Duration? insertAt = this.insertAt;
     if (insertAt != null) {
-      final double x = insertAt.inMilliseconds * pxPerMs;
+      final double x = _x(insertAt);
       canvas.drawLine(
         Offset(x, rulerHeight),
         Offset(x, size.height),
@@ -549,22 +696,31 @@ class _TimelinePainter extends CustomPainter {
       );
     }
     _paintPlayhead(canvas, size);
+    canvas.restore();
   }
 
   void _paintRuler(Canvas canvas, Size size) {
+    final int tickMs = _rulerSteps.firstWhere((step) => step * pxPerMs >= _minTickGap, orElse: () => _rulerSteps.last);
+    final int labelMs = _rulerSteps.firstWhere(
+      (step) => step * pxPerMs >= _minLabelGap && step % tickMs == 0,
+      orElse: () => _rulerSteps.last,
+    );
     final Paint tickPaint = Paint()
       ..color = AppColors.greyDark
       ..strokeWidth = 1;
-    final int msTotal = (size.width / pxPerMs).floor();
-    // A tick every 5 seconds, a label every 30
-    for (int ms = 0; ms <= msTotal; ms += 5000) {
-      final double x = ms * pxPerMs;
-      final bool labelled = ms % 30000 == 0;
+    final int firstMs = (offset.inMilliseconds / tickMs).ceil() * tickMs;
+    final int lastMs = offset.inMilliseconds + (size.width / pxPerMs).ceil();
+    for (int ms = firstMs; ms <= lastMs; ms += tickMs) {
+      final double x = _x(Duration(milliseconds: ms));
+      final bool labelled = ms % labelMs == 0;
       canvas.drawLine(Offset(x, rulerHeight - (labelled ? 10 : 5)), Offset(x, rulerHeight), tickPaint);
       if (!labelled) continue;
+      final String seconds = (ms ~/ 1000 % 60).toString().padLeft(2, '0');
+      // Tenths only when labels are closer than a second
+      final String tenths = labelMs < 1000 ? '.${ms % 1000 ~/ 100}' : '';
       final TextPainter label = TextPainter(
         text: TextSpan(
-          text: '${ms ~/ 60000}:${(ms ~/ 1000 % 60).toString().padLeft(2, '0')}',
+          text: '${ms ~/ 60000}:$seconds$tenths',
           style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight),
         ),
         textDirection: TextDirection.ltr,
@@ -573,8 +729,7 @@ class _TimelinePainter extends CustomPainter {
     }
   }
 
-  void _paintClip(Canvas canvas, Size size, TimelineClip clip, double peak) {
-    final Rect rect = _clipRect(clip, size);
+  void _paintClip(Canvas canvas, Size size, TimelineClip clip, Rect rect) {
     final bool selected = clip.id == selectedClipId;
     final RRect shape = RRect.fromRectAndRadius(rect, _radius);
     canvas.drawRRect(shape, Paint()..color = selected ? AppColors.greyDark : AppColors.greyDarker);
@@ -584,14 +739,20 @@ class _TimelinePainter extends CustomPainter {
         ..color = AppColors.secondary
         ..strokeWidth = 2;
       final double middle = rect.center.dy;
-      for (double x = rect.left + _barStep / 2; x < rect.right; x += _barStep) {
-        // Point of the original track under this bar
+      final double pointsPerMs = waveform.length / trackLength.inMilliseconds;
+      // Only the visible part of the clip
+      final double from = max(rect.left, 0);
+      final double to = min(rect.right, size.width);
+      for (double x = from + _barStep / 2; x < to; x += _barStep) {
+        // Part of the original track under this bar: its loudest point, so zooming out keeps the peaks
         final double sourceMs = clip.sourceStart.inMilliseconds + (x - rect.left) / pxPerMs;
-        final int index = (sourceMs / trackLength.inMilliseconds * waveform.length).floor().clamp(
-          0,
-          waveform.length - 1,
-        );
-        final double halfBar = waveform[index] / peak * rect.height * 0.45;
+        final int first = (sourceMs * pointsPerMs).floor().clamp(0, waveform.length - 1);
+        final int last = ((sourceMs + _barStep / pxPerMs) * pointsPerMs).floor().clamp(first + 1, waveform.length);
+        double loudness = 0;
+        for (int i = first; i < last; i++) {
+          if (waveform[i] > loudness) loudness = waveform[i];
+        }
+        final double halfBar = loudness * rect.height * 0.45;
         canvas.drawLine(Offset(x, middle - halfBar), Offset(x, middle + halfBar), barPaint);
       }
     }
@@ -607,7 +768,7 @@ class _TimelinePainter extends CustomPainter {
   }
 
   void _paintPlayhead(Canvas canvas, Size size) {
-    final double x = position.inMilliseconds * pxPerMs;
+    final double x = _x(position);
     final Paint paint = Paint()
       ..color = AppColors.primary
       ..strokeWidth = 2;
@@ -626,23 +787,25 @@ class _TimelinePainter extends CustomPainter {
   SemanticsBuilderCallback get semanticsBuilder =>
       (Size size) => [
         for (final (int i, TimelineClip clip) in clips.indexed)
-          CustomPainterSemantics(
-            key: ValueKey<int>(clip.id),
-            rect: _clipRect(clip, size),
-            properties: SemanticsProperties(
-              label: 'Clip ${i + 1}',
-              value: '${_formatTime(clip.timelineStart)} to ${_formatTime(clip.timelineEnd)}',
-              increasedValue: _clipValue(clip, nudgeStep),
-              decreasedValue: _clipValue(clip, -nudgeStep),
-              hint: 'Swipe up or down to move it by one second',
-              selected: clip.id == selectedClipId,
-              button: true,
-              textDirection: TextDirection.ltr,
-              onTap: () => onSelect(clip.id),
-              onIncrease: () => onNudge(clip, nudgeStep),
-              onDecrease: () => onNudge(clip, -nudgeStep),
+          // Only the visible part of each clip: clips outside the zoomed view are reached by zooming out
+          if (_clipRect(clip, size).intersect(Offset.zero & size) case final Rect visible when visible.width > 0)
+            CustomPainterSemantics(
+              key: ValueKey<int>(clip.id),
+              rect: visible,
+              properties: SemanticsProperties(
+                label: 'Clip ${i + 1}',
+                value: '${_formatTime(clip.timelineStart)} to ${_formatTime(clip.timelineEnd)}',
+                increasedValue: _clipValue(clip, nudgeStep),
+                decreasedValue: _clipValue(clip, -nudgeStep),
+                hint: 'Swipe up or down to move it by one second',
+                selected: clip.id == selectedClipId,
+                button: true,
+                textDirection: TextDirection.ltr,
+                onTap: () => onSelect(clip.id),
+                onIncrease: () => onNudge(clip, nudgeStep),
+                onDecrease: () => onNudge(clip, -nudgeStep),
+              ),
             ),
-          ),
       ];
 
   @override
@@ -653,9 +816,10 @@ class _TimelinePainter extends CustomPainter {
       old.insertAt != insertAt ||
       old.waveform != waveform ||
       old.pxPerMs != pxPerMs ||
+      old.offset != offset ||
       old.trackLength != trackLength;
 
   @override
   bool shouldRebuildSemantics(_TimelinePainter old) =>
-      old.clips != clips || old.selectedClipId != selectedClipId || old.pxPerMs != pxPerMs;
+      old.clips != clips || old.selectedClipId != selectedClipId || old.pxPerMs != pxPerMs || old.offset != offset;
 }

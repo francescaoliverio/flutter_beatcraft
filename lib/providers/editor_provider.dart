@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,8 +25,12 @@ final editorEngineProvider = Provider<AudioEngine>((ref) {
   return engine;
 });
 
-/// Waveform resolution for the whole track.
-const int _waveformPoints = 400;
+/// Waveform points per second of track, enough for the closest zoom (1 s across the screen).
+const int _waveformPointsPerSecond = 50;
+
+/// Limits on the waveform points of a whole track, for very short and very long tracks.
+const int _minWaveformPoints = 400;
+const int _maxWaveformPoints = 30000;
 
 /// How often the playhead moves while playing.
 const Duration _tick = Duration(milliseconds: 50);
@@ -79,7 +84,7 @@ class EditorState {
   final Track track;
   final Duration trackLength;
 
-  /// Loudness of the whole original track, from 0 to 1.
+  /// Loudness of the whole original track, from 0 to 1, with the loudest point at 1.
   final Float32List waveform;
 
   /// In drawing order: when clips overlap, the later one is on top.
@@ -186,7 +191,8 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
     final Track track = request.track ?? await _projectTrack(project!);
     final Duration length = await _engine.load(track.audio);
-    final Float32List waveform = await _engine.waveform(_waveformPoints);
+    final int points = (length.inSeconds * _waveformPointsPerSecond).clamp(_minWaveformPoints, _maxWaveformPoints);
+    final Float32List waveform = _normalized(await _engine.waveform(points));
 
     if (project != null) {
       _nextClipId = project.clips.fold(0, (int next, TimelineClip clip) => clip.id >= next ? clip.id + 1 : next);
@@ -210,6 +216,13 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
       name: '${track.name} remix',
       hasUnsavedChanges: true,
     );
+  }
+
+  /// [loudness] scaled so the loudest point is 1, so the timeline draws it at full height.
+  Float32List _normalized(Float32List loudness) {
+    final double peak = loudness.fold(0, max);
+    if (peak <= 0) return loudness;
+    return Float32List.fromList([for (final double value in loudness) value / peak]);
   }
 
   /// The track of a saved remix, fetched again from Jamendo and checked against the remix rule.
