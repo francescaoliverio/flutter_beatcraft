@@ -7,8 +7,8 @@ Duration s(int seconds) => Duration(seconds: seconds);
 void main() {
   // Two clips with a 2 second gap: track 10-14 at 0-4, track 30-33 at 6-9
   final List<TimelineClip> clips = [
-    TimelineClip(sourceStart: s(10), sourceEnd: s(14), timelineStart: s(0)),
-    TimelineClip(sourceStart: s(30), sourceEnd: s(33), timelineStart: s(6)),
+    TimelineClip(id: 0, sourceStart: s(10), sourceEnd: s(14), timelineStart: s(0)),
+    TimelineClip(id: 1, sourceStart: s(30), sourceEnd: s(33), timelineStart: s(6)),
   ];
 
   test('from the start every clip plays whole, at its timeline position', () {
