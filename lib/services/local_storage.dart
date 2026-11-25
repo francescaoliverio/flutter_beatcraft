@@ -8,6 +8,7 @@ class LocalStorage {
 
   static const String _lastTrackIdKey = 'last_track_id';
   static const String _userIdKey = 'logged_user_id';
+  static const String _favoriteTrackIdsKey = 'favorite_track_ids';
 
   Future<String?> readLastTrackId() => _prefs.getString(_lastTrackIdKey);
 
@@ -20,4 +21,9 @@ class LocalStorage {
   Future<void> saveUserId(int id) => _prefs.setInt(_userIdKey, id);
 
   Future<void> clearUserId() => _prefs.remove(_userIdKey);
+
+  /// Liked tracks, newest first.
+  Future<List<String>> readFavoriteTrackIds() async => await _prefs.getStringList(_favoriteTrackIdsKey) ?? [];
+
+  Future<void> saveFavoriteTrackIds(List<String> ids) => _prefs.setStringList(_favoriteTrackIdsKey, ids);
 }

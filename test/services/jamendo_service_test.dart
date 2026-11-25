@@ -140,6 +140,47 @@ void main() {
       expect(playlists.single.name, 'chillout');
     });
 
+    test('tracksByIds asks for all ids at once and keeps their order', () async {
+      late Uri sent;
+      final service = JamendoService(
+        MockClient((request) async {
+          sent = request.url;
+          // Jamendo doesn't document the order: answer in a different one
+          return http.Response(
+            body(
+              results: [
+                {...trackJson(), 'id': '2'},
+                {...trackJson(), 'id': '1'},
+              ],
+            ),
+            200,
+          );
+        }),
+        'test-id',
+      );
+
+      final tracks = await service.tracksByIds(['1', '3', '2']);
+
+      expect(sent.queryParameters['id'], '1 3 2');
+      expect(sent.queryParameters['limit'], '3');
+      // 3 is not returned by Jamendo and is skipped
+      expect(tracks.map((t) => t.id), ['1', '2']);
+    });
+
+    test('tracksByIds without ids makes no request', () async {
+      var calls = 0;
+      final service = JamendoService(
+        MockClient((_) async {
+          calls++;
+          return http.Response(body(), 200);
+        }),
+        'test-id',
+      );
+
+      expect(await service.tracksByIds([]), isEmpty);
+      expect(calls, 0);
+    });
+
     test('trackById returns null when the track is not found', () async {
       final service = JamendoService(MockClient((_) async => http.Response(body(), 200)), 'test-id');
 

@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeLocalStorage implements LocalStorage {
   int? userId;
   String? lastTrackId;
+  List<String> favoriteTrackIds = [];
 
   @override
   Future<int?> readUserId() async => userId;
@@ -33,6 +34,12 @@ class FakeLocalStorage implements LocalStorage {
 
   @override
   Future<void> clearLastTrackId() async => lastTrackId = null;
+
+  @override
+  Future<List<String>> readFavoriteTrackIds() async => favoriteTrackIds;
+
+  @override
+  Future<void> saveFavoriteTrackIds(List<String> ids) async => favoriteTrackIds = ids;
 }
 
 /// Engine without audio: every load waits until the test calls [finish] or [fail].

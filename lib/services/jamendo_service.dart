@@ -72,6 +72,30 @@ class JamendoService {
     }
   }
 
+  /// Most values accepted by `limit`.
+  static const int _maxLimit = 200;
+
+  /// Tracks by id, in the order of [ids]. Only the first 200 ids are requested, ids Jamendo doesn't return are skipped.
+  Future<List<Track>> tracksByIds(List<String> ids) async {
+    if (ids.isEmpty) return [];
+    final List<String> requested = ids.take(_maxLimit).toList();
+    final List<dynamic> results;
+    try {
+      // limit is needed: its default is 10
+      results = await _get('tracks', {
+        'id': requested.join(' '),
+        'limit': '${requested.length}',
+        'imagesize': _imageSize,
+      });
+    } on JamendoException catch (e) {
+      if (e.failure == JamendoFailure.empty) return [];
+      rethrow;
+    }
+    // The documentation doesn't say in which order the results come
+    final Map<String, Track> byId = {for (final Track track in _parse(results, Track.fromJson)) track.id: track};
+    return requested.map((id) => byId[id]).nonNulls.toList();
+  }
+
   /// Returns the `results` list. Throws [JamendoException].
   Future<List<dynamic>> _get(String path, Map<String, String> params) async {
     if (_clientId.isEmpty) throw const JamendoException(JamendoFailure.missingClientId);

@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../models/track.dart';
+import '../providers/favorites_provider.dart';
 import '../providers/playback_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
@@ -35,6 +36,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final Track? track = ref.watch(currentTrackProvider).value;
     final PlaybackState playback = ref.watch(playbackProvider);
     final PlaybackNotifier controls = ref.read(playbackProvider.notifier);
+    final List<String>? favorites = ref.watch(favoritesProvider).value;
+    final bool isLiked = track != null && (favorites?.contains(track.id) ?? false);
 
     // Playback refers to another track only while the restored track hasn't been loaded yet
     final bool isThisTrack = track != null && playback.trackId == track.id;
@@ -76,10 +79,31 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.paddingLg),
-                  Heading(track.name, style: HeadingStyle.h3, uppercase: false),
-                  Text(
-                    '${track.artistName} · via Jamendo',
-                    style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Heading(track.name, style: HeadingStyle.h3, uppercase: false),
+                            Text(
+                              '${track.artistName} · via Jamendo',
+                              style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        isSelected: isLiked,
+                        icon: const Icon(PhosphorIconsRegular.heart),
+                        selectedIcon: const Icon(PhosphorIconsFill.heart, color: AppColors.secondary),
+                        tooltip: isLiked ? 'Remove like' : 'Like',
+                        // Disabled until the saved likes are read
+                        onPressed: favorites == null
+                            ? null
+                            : () => ref.read(favoritesProvider.notifier).toggle(track.id),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.paddingMd),
                   if (status == PlaybackStatus.error)
