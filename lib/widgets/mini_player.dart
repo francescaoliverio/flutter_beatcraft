@@ -29,65 +29,99 @@ class MiniPlayer extends ConsumerWidget {
 
     return ColoredBox(
       color: AppColors.greyDarker,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg, vertical: AppSpacing.paddingSm),
-        child: Row(
-          children: [
-            // Title and artist are read as one button that opens the player
-            Expanded(
-              child: Semantics(
-                button: true,
-                onTap: openPlayer,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: openPlayer,
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-                        child: Image.network(
-                          track.image,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
-                          excludeFromSemantics: true,
-                          errorBuilder: (context, error, stackTrace) => Image.asset(
-                            track.fallbackCoverAsset,
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                            excludeFromSemantics: true,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.paddingMd),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(track.name, style: AppTextStyles.pBold, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text(
-                              track.artistName,
-                              style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg, vertical: AppSpacing.paddingSm),
+            child: Row(
+              children: [
+                // Title and artist are read as one button that opens the player
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    onTap: openPlayer,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: openPlayer,
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                            child: Image.network(
+                              track.image,
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              excludeFromSemantics: true,
+                              errorBuilder: (context, error, stackTrace) => Image.asset(
+                                track.fallbackCoverAsset,
+                                width: 40,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                excludeFromSemantics: true,
+                              ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: AppSpacing.paddingMd),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  track.name,
+                                  style: AppTextStyles.pBold,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  track.artistName,
+                                  style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                IconButton(
+                  icon: Icon(isPlaying ? PhosphorIconsRegular.pause : PhosphorIconsRegular.play),
+                  tooltip: isLoading ? 'Loading' : (isPlaying ? 'Pause' : 'Play'),
+                  onPressed: isLoading ? null : ref.read(playbackProvider.notifier).toggle,
+                ),
+              ],
             ),
-            IconButton(
-              icon: Icon(isPlaying ? PhosphorIconsRegular.pause : PhosphorIconsRegular.play),
-              tooltip: isLoading ? 'Loading' : (isPlaying ? 'Pause' : 'Play'),
-              onPressed: isLoading ? null : ref.read(playbackProvider.notifier).toggle,
-            ),
-          ],
-        ),
+          ),
+          _ProgressBar(trackId: track.id),
+        ],
       ),
+    );
+  }
+}
+
+/// Thin bar under the mini player with the position in the track.
+/// Its own widget, so the position updates rebuild only the bar.
+class _ProgressBar extends ConsumerWidget {
+  const _ProgressBar({required this.trackId});
+
+  final String trackId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final double progress = ref.watch(
+      playbackProvider.select((p) {
+        if (p.trackId != trackId || p.duration <= Duration.zero) return 0.0;
+        return (p.position.inMilliseconds / p.duration.inMilliseconds).clamp(0.0, 1.0);
+      }),
+    );
+
+    // Decorative: the player screen has the accessible slider with the time
+    return ExcludeSemantics(
+      child: LinearProgressIndicator(value: progress, color: AppColors.tertiary, backgroundColor: AppColors.greyDark),
     );
   }
 }

@@ -65,6 +65,15 @@ class AppTheme {
         ),
       ),
 
+      // Playback position in the player, same colors as the mini player bar.
+      // No halo around the thumb while dragging, as there is no ripple elsewhere.
+      sliderTheme: const SliderThemeData(
+        activeTrackColor: AppColors.tertiary,
+        thumbColor: AppColors.tertiary,
+        inactiveTrackColor: AppColors.greyDark,
+        overlayColor: Colors.transparent,
+      ),
+
       // Icon buttons: no ripple, pressed color instead
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
