@@ -4,6 +4,8 @@ import '../models/user.dart';
 import '../services/auth_service.dart';
 import 'http_client_provider.dart';
 import 'local_storage_provider.dart';
+import 'playback_provider.dart';
+import 'player_provider.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService(ref.watch(httpClientProvider)));
 
@@ -34,8 +36,13 @@ class AuthNotifier extends AsyncNotifier<AuthSession?> {
     await ref.read(localStorageProvider).saveUserId(session.user.id);
   }
 
+  /// Also stops the music and forgets the last track, so nothing of this user stays on the login screen.
   Future<void> logout() async {
     state = const AsyncData(null);
+    // Disposing the engine unloads the track and stops it; the playback state goes back to idle
+    ref.invalidate(audioEngineProvider);
+    ref.invalidate(playbackProvider);
+    await ref.read(currentTrackProvider.notifier).clear();
     await ref.read(localStorageProvider).clearUserId();
   }
 }

@@ -102,12 +102,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       },
                       // Screen readers announce the time instead of a percentage
                       semanticFormatterCallback: (value) =>
-                          '${_formatTime(Duration(seconds: value.round()))} of ${_formatTime(playback.duration)}',
+                          '${_formatTime(Duration(seconds: value.floor()))} of ${_formatTime(playback.duration)}',
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_formatTime(Duration(seconds: seconds.round())), style: AppTextStyles.pSm),
+                        // Truncated like the duration, so the end shows the same time on both sides
+                        Text(_formatTime(Duration(seconds: seconds.floor())), style: AppTextStyles.pSm),
                         Text(_formatTime(isThisTrack ? playback.duration : Duration.zero), style: AppTextStyles.pSm),
                       ],
                     ),

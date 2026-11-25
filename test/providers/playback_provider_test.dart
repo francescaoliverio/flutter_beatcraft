@@ -28,6 +28,9 @@ class FakeLocalStorage implements LocalStorage {
 
   @override
   Future<void> saveLastTrackId(String id) async => lastTrackId = id;
+
+  @override
+  Future<void> clearLastTrackId() async => lastTrackId = null;
 }
 
 /// Engine without audio: every load waits until the test calls [finish] or [fail].

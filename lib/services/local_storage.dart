@@ -13,6 +13,8 @@ class LocalStorage {
 
   Future<void> saveLastTrackId(String id) => _prefs.setString(_lastTrackIdKey, id);
 
+  Future<void> clearLastTrackId() => _prefs.remove(_lastTrackIdKey);
+
   Future<int?> readUserId() => _prefs.getInt(_userIdKey);
 
   Future<void> saveUserId(int id) => _prefs.setInt(_userIdKey, id);

@@ -24,6 +24,12 @@ class CurrentTrackNotifier extends AsyncNotifier<Track?> {
     state = AsyncData(track);
     await ref.read(localStorageProvider).saveLastTrackId(track.id);
   }
+
+  /// Nothing selected, also at the next launch. Used at logout, so the next user doesn't see this track.
+  Future<void> clear() async {
+    state = const AsyncData(null);
+    await ref.read(localStorageProvider).clearLastTrackId();
+  }
 }
 
 final currentTrackProvider = AsyncNotifierProvider<CurrentTrackNotifier, Track?>(

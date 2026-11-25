@@ -28,6 +28,9 @@ class FakeLocalStorage implements LocalStorage {
 
   @override
   Future<void> saveLastTrackId(String id) async => lastTrackId = id;
+
+  @override
+  Future<void> clearLastTrackId() async => lastTrackId = null;
 }
 
 const Map<String, Object> emily = {
@@ -91,6 +94,18 @@ void main() {
       await container.read(authProvider.notifier).logout();
       expect(storage.userId, isNull);
       expect(container.read(authProvider).value, isNull);
+    });
+
+    test('logout forgets the last track, so the next user does not see it', () async {
+      final storage = FakeLocalStorage()
+        ..userId = 1
+        ..lastTrackId = '2353774';
+      final container = containerWith(storage);
+      await container.read(authProvider.future);
+
+      await container.read(authProvider.notifier).logout();
+
+      expect(storage.lastTrackId, isNull);
     });
   });
 }
