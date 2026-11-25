@@ -77,14 +77,21 @@ class FakeAudioEngine implements AudioEngine {
   @override
   Future<Float32List> waveform(int points) async => Float32List(points);
 
-  @override
-  void playTimeline(List<TimelineClip> clips, Duration from) {}
+  /// Clips and start of the last [playTimeline], null when the timeline is stopped.
+  List<TimelineClip>? timelineClips;
+  Duration timelineFrom = Duration.zero;
 
   @override
-  void stopTimeline() {}
+  void playTimeline(List<TimelineClip> clips, Duration from) {
+    timelineClips = clips;
+    timelineFrom = from;
+  }
 
   @override
-  Duration get timelinePosition => Duration.zero;
+  void stopTimeline() => timelineClips = null;
+
+  @override
+  Duration get timelinePosition => timelineFrom;
 
   @override
   Future<void> dispose() async {}

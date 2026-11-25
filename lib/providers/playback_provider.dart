@@ -86,6 +86,11 @@ class PlaybackNotifier extends Notifier<PlaybackState> {
     }
   }
 
+  /// Pauses if playing, e.g. when the remix editor starts playing.
+  void pause() {
+    if (state.isPlaying) _pause();
+  }
+
   void seek(Duration position) {
     if (!state.isReady) return;
     _engine.seek(position);

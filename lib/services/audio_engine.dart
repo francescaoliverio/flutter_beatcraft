@@ -85,7 +85,7 @@ abstract class AudioEngine {
   Future<void> dispose();
 }
 
-/// [AudioEngine] on flutter_soloud.
+/// [AudioEngine] on flutter_soloud. Each instance has its own track: the player and the editor use one each.
 /// The track stays in memory and is never written to disk, as the Jamendo terms require:
 /// loadUrl would save a temporary copy, so the bytes are downloaded here and passed to loadMem.
 class SoLoudAudioEngine implements AudioEngine {
@@ -97,6 +97,16 @@ class SoLoudAudioEngine implements AudioEngine {
   /// The default is 16 and, when it is reached, the engine stops the oldest voice of the same track:
   /// with one voice per clip, a longer remix would lose its first clips.
   static const int _maxVoices = 128;
+
+  /// Shared by every engine instance (player and editor), so SoLoud is initialized only once.
+  static Future<void>? _initialization;
+
+  static Future<void> _initialize() async {
+    final SoLoud soloud = SoLoud.instance;
+    if (soloud.isInitialized) return;
+    await soloud.init();
+    soloud.setMaxActiveVoiceCount(_maxVoices);
+  }
 
   final http.Client _client;
   final SoLoud _soloud = SoLoud.instance;
@@ -120,11 +130,10 @@ class SoLoudAudioEngine implements AudioEngine {
     final int loadId = ++_loadId;
 
     try {
-      if (!_soloud.isInitialized) {
-        await _soloud.init();
-        _soloud.setMaxActiveVoiceCount(_maxVoices);
-      }
+      await (_initialization ??= _initialize());
     } on SoLoudException catch (e) {
+      // The next load tries again
+      _initialization = null;
       throw AudioLoadException(e.toString());
     }
 
@@ -260,7 +269,7 @@ class SoLoudAudioEngine implements AudioEngine {
     if (source != null) await _soloud.disposeSource(source);
   }
 
-  /// Frees the current track. The engine stays initialized: the remix editor will use it too.
+  /// Frees the current track. SoLoud stays initialized: other instances may be using it.
   @override
   Future<void> dispose() => _unload();
 }
