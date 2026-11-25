@@ -56,13 +56,8 @@ class ProfileScreen extends ConsumerWidget {
                   // tooltip is also the screen reader label
                   tooltip: 'Log out',
                   icon: const Icon(PhosphorIconsRegular.signOut),
+                  // Neutral colors from the icon button theme
                   onPressed: () => ref.read(authProvider.notifier).logout(),
-                  style: ButtonStyle(
-                    foregroundColor: WidgetStateProperty.resolveWith(
-                      (states) =>
-                          states.contains(WidgetState.pressed) ? AppColors.secondaryPressed : AppColors.secondary,
-                    ),
-                  ),
                 ),
               ],
             ),
