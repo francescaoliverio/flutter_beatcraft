@@ -36,8 +36,10 @@ The Create screen is a timeline editor where you remix a Jamendo track.
 - [x] Login with a demo account (DummyJSON)
 - [x] Home feed and music player with real Creative Commons tracks (Jamendo)
 - [x] Ready to remix: popular tracks that can be remixed (Jamendo)
-- [ ] Trending artists (Jamendo)
-- [ ] Playlists (Jamendo)
+- [x] Trending artists (Jamendo): each artist opens a page with since when they are on Jamendo, their website when they have one, and their 50 most popular tracks
+- [x] Playlists (Jamendo), first in Home: each playlist opens with its tracks in order
+
+Playing a track from a list (a playlist, an artist, a Home row, the favorites) makes that list the queue: next and previous move through it, the next track starts when one ends, and after the last one it starts again from the first. Previous starts the track again if it played for more than 3 seconds.
 
 ### Your library
 
