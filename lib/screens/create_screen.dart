@@ -9,6 +9,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../models/timeline_clip.dart';
 import '../providers/editor_provider.dart';
+import '../providers/remix_provider.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
@@ -16,6 +17,7 @@ import '../widgets/button.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
+import '../widgets/undo_snack_bar.dart';
 
 /// Minutes, seconds and tenths, e.g. 1:08.4.
 String _formatTime(Duration time) {
@@ -77,9 +79,13 @@ class CreateScreen extends ConsumerWidget {
   const CreateScreen({super.key});
 
   Future<void> _save(BuildContext context, WidgetRef ref) async {
-    await ref.read(editorProvider.notifier).save();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Remix saved')));
+    final SavedRemix? saved = await ref.read(editorProvider.notifier).save();
+    if (saved == null || !context.mounted) return;
+    showUndoSnackBar(
+      context,
+      message: 'Remix saved',
+      onUndo: () => ref.read(remixProjectsProvider.notifier).revert(saved.projectId, saved.previous),
+    );
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref, String current) async {

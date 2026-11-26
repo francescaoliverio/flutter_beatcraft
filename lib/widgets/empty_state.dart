@@ -20,9 +20,10 @@ class EmptyState extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.paddingMd),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.greyDarker,
-        borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+        border: Border.all(color: AppColors.greyDark),
+        borderRadius: const BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

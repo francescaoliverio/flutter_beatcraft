@@ -85,6 +85,18 @@ class AppTheme {
         ),
       ),
 
+      // Snackbars: same surface as EmptyState. Their actions are Buttons (see showUndoSnackBar)
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.greyDarker,
+        contentTextStyle: AppTextStyles.p.copyWith(color: AppColors.textLight),
+        closeIconColor: AppColors.greyLight,
+        behavior: SnackBarBehavior.floating,
+        shape: const RoundedRectangleBorder(
+          side: BorderSide(color: AppColors.greyDark),
+          borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+        ),
+      ),
+
       // Cursor, selected text and selection handles in text fields.
       // 0.4 alpha on the selection is the same as Flutter's default.
       textSelectionTheme: TextSelectionThemeData(

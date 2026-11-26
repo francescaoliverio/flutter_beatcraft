@@ -380,6 +380,29 @@ void main() {
       expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
     });
 
+    test('undo of a first save removes the project, undo of a later save puts the old version back', () async {
+      await openEditor();
+      final EditorNotifier editor = container.read(editorProvider.notifier);
+      final RemixProjectsNotifier projects = container.read(remixProjectsProvider.notifier);
+
+      final SavedRemix first = (await editor.save())!;
+      expect(first.previous, isNull);
+      await projects.revert(first.projectId, first.previous);
+      expect(storage.remixProjects[1], isEmpty);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+
+      await editor.save();
+      editor
+        ..seek(const Duration(seconds: 60))
+        ..split();
+      final SavedRemix second = (await editor.save())!;
+      expect(second.previous!.clips, hasLength(1));
+      await projects.revert(second.projectId, second.previous);
+      expect(storage.remixProjects[1]!.single.clips, hasLength(1));
+      // The editor still has two clips, so it is no longer saved
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+    });
+
     test('a project whose track can no longer be remixed does not open', () async {
       jamendoReturns(trackJson(license: 'http://creativecommons.org/licenses/by-nd/3.0/'));
       container.read(remixProvider.notifier).open(savedProject());

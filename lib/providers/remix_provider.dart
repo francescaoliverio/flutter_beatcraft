@@ -47,6 +47,10 @@ class RemixProjectsNotifier extends AsyncNotifier<List<RemixProject>> {
     await _update([project, ...projects.where((p) => p.id != project.id)]);
   }
 
+  /// Undoes a save: puts [previous] back, or removes the project if it was its first save.
+  Future<void> revert(String projectId, RemixProject? previous) =>
+      previous == null ? delete(projectId) : save(previous);
+
   Future<void> delete(String projectId) async {
     final List<RemixProject> projects = state.value ?? await future;
     await _update(projects.where((p) => p.id != projectId).toList());

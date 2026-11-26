@@ -65,6 +65,9 @@ List<TimelineClip> packClips(List<TimelineClip> clips) {
   return [for (final TimelineClip clip in clips) clip.copyWith(timelineStart: starts[clip.id])];
 }
 
+/// A save that can be undone: the saved project and the version it replaced, null on its first save.
+typedef SavedRemix = ({String projectId, RemixProject? previous});
+
 /// The remix being edited.
 class EditorState {
   const EditorState({
@@ -248,10 +251,14 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
   }
 
   /// Saves the remix as a project: the first time it gets an id, then it is updated in place.
-  Future<void> save() async {
+  /// Returns what an undo of this save needs, null if nothing was open.
+  Future<SavedRemix?> save() async {
     final EditorState? editor = state.value;
-    if (editor == null) return;
+    if (editor == null) return null;
     final String projectId = editor.projectId ?? DateTime.now().microsecondsSinceEpoch.toString();
+    final List<RemixProject> projects =
+        ref.read(remixProjectsProvider).value ?? await ref.read(remixProjectsProvider.future);
+    final RemixProject? previous = projects.where((p) => p.id == projectId).firstOrNull;
     await ref
         .read(remixProjectsProvider.notifier)
         .save(
@@ -265,23 +272,23 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
         );
     // Edits made while saving are kept: only the project id and the saved flag change
     final EditorState? current = state.value;
-    if (current == null) return;
-    state = AsyncData(
-      current.copyWith(projectId: projectId, hasUnsavedChanges: !identical(current.clips, editor.clips)),
-    );
+    if (current != null) {
+      state = AsyncData(
+        current.copyWith(projectId: projectId, hasUnsavedChanges: !identical(current.clips, editor.clips)),
+      );
+    }
+    return (projectId: projectId, previous: previous);
   }
 
-  /// Unsaved once its project is deleted, saved again if it comes back with the same content.
+  /// Saved only while its project holds the same content: deleting it or putting back an older version
+  /// (undo of a delete or of a save) changes the Save button.
   void _onProjectsChanged(List<RemixProject> projects) {
     final EditorState? editor = state.value;
     final String? projectId = editor?.projectId;
     if (editor == null || projectId == null) return;
     final RemixProject? project = projects.where((p) => p.id == projectId).firstOrNull;
-    if (project == null && !editor.hasUnsavedChanges) {
-      state = AsyncData(editor.copyWith(hasUnsavedChanges: true));
-    } else if (project != null && editor.hasUnsavedChanges && _matches(project, editor)) {
-      state = AsyncData(editor.copyWith(hasUnsavedChanges: false));
-    }
+    final bool unsaved = project == null || !_matches(project, editor);
+    if (unsaved != editor.hasUnsavedChanges) state = AsyncData(editor.copyWith(hasUnsavedChanges: unsaved));
   }
 
   bool _matches(RemixProject project, EditorState editor) =>
