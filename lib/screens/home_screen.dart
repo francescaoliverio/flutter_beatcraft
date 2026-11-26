@@ -13,11 +13,17 @@ import '../widgets/heading.dart';
 import '../widgets/media_card.dart';
 import '../widgets/media_section.dart';
 import '../widgets/skeleton.dart';
+import 'artist_screen.dart';
 import 'player_screen.dart';
+import 'playlist_screen.dart';
 
-/// Home feed: new releases, trending artists, playlists from Jamendo.
+/// Home feed: playlists, new releases, tracks ready to remix and trending artists from Jamendo.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  /// Opens a playlist or artist screen, with a back arrow.
+  void _open(BuildContext context, Widget screen) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
 
   /// Plays [track] with the row it is in as the queue, and opens the player.
   void _openTrack(BuildContext context, WidgetRef ref, Track track, List<Track>? row) {
@@ -35,6 +41,21 @@ class HomeScreen extends ConsumerWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg),
             child: Heading('Home'),
+          ),
+          const SizedBox(height: AppSpacing.paddingLg),
+          MediaSection<Playlist>(
+            title: 'Playlists',
+            items: ref.watch(playlistsProvider),
+            itemBuilder: (playlist) => MediaCard(
+              image: AssetImage(playlist.coverAsset),
+              title: playlist.name,
+              onTap: () => _open(context, PlaylistScreen(playlist: playlist)),
+            ),
+            errorBuilder: (error) => _ErrorForSection(
+              error: error,
+              title: "Couldn't load playlists",
+              onRetry: () => ref.invalidate(playlistsProvider),
+            ),
           ),
           const SizedBox(height: AppSpacing.paddingLg),
           MediaSection<Track>(
@@ -75,24 +96,16 @@ class HomeScreen extends ConsumerWidget {
             title: 'Trending artists',
             items: ref.watch(trendingArtistsProvider),
             skeletonShape: SkeletonShape.circle,
-            itemBuilder: (artist) =>
-                MediaCard(image: NetworkImage(artist.image), title: artist.name, shape: MediaCardShape.circle),
+            itemBuilder: (artist) => MediaCard(
+              image: NetworkImage(artist.image),
+              title: artist.name,
+              shape: MediaCardShape.circle,
+              onTap: () => _open(context, ArtistScreen(artist: artist)),
+            ),
             errorBuilder: (error) => _ErrorForSection(
               error: error,
               title: "Couldn't load artists",
               onRetry: () => ref.invalidate(trendingArtistsProvider),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.paddingLg),
-          MediaSection<Playlist>(
-            title: 'Playlists',
-            items: ref.watch(playlistsProvider),
-            // TODO: tappable when the playlist screen exists
-            itemBuilder: (playlist) => MediaCard(image: AssetImage(playlist.coverAsset), title: playlist.name),
-            errorBuilder: (error) => _ErrorForSection(
-              error: error,
-              title: "Couldn't load playlists",
-              onRetry: () => ref.invalidate(playlistsProvider),
             ),
           ),
         ],

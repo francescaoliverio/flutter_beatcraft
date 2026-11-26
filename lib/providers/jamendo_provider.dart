@@ -66,3 +66,18 @@ final playlistsProvider = FutureProvider<List<Playlist>>((ref) async {
   if (playlists.isEmpty) throw const JamendoException(JamendoFailure.empty);
   return playlists;
 }, retry: _noRetry);
+
+/// Tracks of a playlist, in its order. Released when its screen closes.
+final playlistTracksProvider = FutureProvider.autoDispose.family<List<Track>, String>(
+  (ref, playlistId) => ref.watch(jamendoServiceProvider).playlistTracks(playlistId),
+  retry: _noRetry,
+);
+
+/// How many tracks the artist screen shows, the most popular first.
+const int artistTracksLength = 50;
+
+/// The most popular tracks of an artist. Released when its screen closes.
+final artistTracksProvider = FutureProvider.autoDispose.family<List<Track>, String>(
+  (ref, artistId) => ref.watch(jamendoServiceProvider).artistTracks(artistId, limit: artistTracksLength),
+  retry: _noRetry,
+);

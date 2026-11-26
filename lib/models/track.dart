@@ -9,6 +9,7 @@ class Track {
     required this.audiodownloadAllowed,
     required this.licenseCcurl,
     this.shareUrl,
+    this.duration,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -21,6 +22,10 @@ class Track {
       audiodownloadAllowed: json['audiodownload_allowed'] as bool,
       licenseCcurl: json['license_ccurl'] as String,
       shareUrl: json['shareurl'] as String?,
+      duration: switch (json['duration']) {
+        final int seconds => Duration(seconds: seconds),
+        _ => null,
+      },
     );
   }
 
@@ -42,6 +47,9 @@ class Track {
   /// Page of the track on Jamendo, where the Jamendo terms ask the app to link each track.
   /// Not described in the API documentation, but returned by /tracks (checked with a real call).
   final String? shareUrl;
+
+  /// Null if Jamendo doesn't give it.
+  final Duration? duration;
 
   /// Local cover used if [image] fails to load: one of the 18 remix covers, always the same for the same track.
   String get fallbackCoverAsset {

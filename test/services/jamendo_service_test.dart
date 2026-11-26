@@ -212,5 +212,73 @@ void main() {
 
       expect(await service.trackById('999'), isNull);
     });
+
+    test('playlist tracks come in the order of their position, with all their fields', () async {
+      final List<Uri> sent = [];
+      final service = JamendoService(
+        MockClient((request) async {
+          sent.add(request.url);
+          if (request.url.path.contains('playlists')) {
+            return http.Response(
+              body(
+                results: [
+                  {
+                    'id': '11696',
+                    'name': 'Instrumental',
+                    'tracks': [
+                      {'id': '3', 'position': '2'},
+                      {'id': '1', 'position': '10'},
+                      {'id': '2', 'position': '1'},
+                    ],
+                  },
+                ],
+              ),
+              200,
+            );
+          }
+          return http.Response(
+            body(
+              results: [
+                for (final String id in ['1', '2', '3']) {...trackJson(), 'id': id},
+              ],
+            ),
+            200,
+          );
+        }),
+        'test-id',
+      );
+
+      final tracks = await service.playlistTracks('11696');
+
+      expect(tracks.map((t) => t.id), ['2', '3', '1']);
+      expect(sent.first.queryParameters['track_type'], 'single albumtrack');
+      expect(sent.last.queryParameters['id'], '2 3 1');
+      expect(tracks.first.shareUrl, isNotNull);
+    });
+
+    test('an empty playlist has no tracks instead of an error', () async {
+      final service = JamendoService(MockClient((_) async => http.Response(body(), 200)), 'test-id');
+
+      expect(await service.playlistTracks('100268'), isEmpty);
+    });
+
+    test('artist tracks are the most popular ones of that artist', () async {
+      late Uri sent;
+      final service = JamendoService(
+        MockClient((request) async {
+          sent = request.url;
+          return http.Response(body(results: [trackJson()]), 200);
+        }),
+        'test-id',
+      );
+
+      final tracks = await service.artistTracks('603605', limit: 50);
+
+      expect(tracks, hasLength(1));
+      expect(
+        (sent.queryParameters['artist_id'], sent.queryParameters['order'], sent.queryParameters['limit']),
+        ('603605', 'popularity_total', '50'),
+      );
+    });
   });
 }

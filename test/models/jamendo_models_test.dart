@@ -31,6 +31,7 @@ void main() {
       expect(track.image, startsWith('https://usercontent.jamendo.com'));
       expect(track.audio, startsWith('https://prod-1.storage.jamendo.com'));
       expect(track.shareUrl, 'https://www.jamendo.com/track/2353774');
+      expect(track.duration, const Duration(seconds: 343));
     });
 
     test('a track without shareurl has no page to link', () {
@@ -73,6 +74,22 @@ void main() {
       expect(artist.id, '606900');
       expect(artist.name, 'Los Intokables Del Reggaeton - The BackFlash');
       expect(artist.image, startsWith('https://usercontent.jamendo.com'));
+      expect(artist.joinDate, DateTime(2026, 9, 19));
+      // An empty website is no website
+      expect(artist.website, isNull);
+    });
+
+    test('reads the website and the Jamendo page when there are', () {
+      final artist = Artist.fromJson({
+        'id': '376782',
+        'name': 'WE ARE FM',
+        'website': 'https://wearefm.example',
+        'joindate': '2011-12-29',
+        'image': 'https://usercontent.jamendo.com?type=artist&id=376782&width=300',
+        'shareurl': 'https://www.jamendo.com/artist/376782',
+      });
+
+      expect((artist.website, artist.shareUrl), ('https://wearefm.example', 'https://www.jamendo.com/artist/376782'));
     });
   });
 

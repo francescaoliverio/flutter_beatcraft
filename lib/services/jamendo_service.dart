@@ -76,6 +76,53 @@ class JamendoService {
     return _parse(results, (json) => Playlist.fromJson(json, mood));
   }
 
+  /// Tracks of a playlist in its order, at most 200. Empty if it has none.
+  /// The tracks given by /playlists/tracks miss some fields (shareurl) and don't come in order: only their ids
+  /// and positions are read here, then the tracks are fetched with [tracksByIds].
+  Future<List<Track>> playlistTracks(String playlistId) async {
+    final List<dynamic> results;
+    try {
+      results = await _get('playlists/tracks', {
+        'id': playlistId,
+        // The default is album tracks only: singles would be missing
+        'track_type': 'single albumtrack',
+        'limit': '$_maxLimit',
+      });
+    } on JamendoException catch (e) {
+      // An empty playlist comes back as no results
+      if (e.failure == JamendoFailure.empty) return [];
+      rethrow;
+    }
+    final List<({int position, String id})> entries;
+    try {
+      final List<dynamic> tracks = (results.first as Map<String, dynamic>)['tracks'] as List<dynamic>;
+      entries = [
+        for (final dynamic track in tracks)
+          (position: int.tryParse('${(track as Map<String, dynamic>)['position']}') ?? 0, id: track['id'] as String),
+      ];
+    } on TypeError {
+      throw const JamendoException(JamendoFailure.other);
+    }
+    entries.sort((a, b) => a.position.compareTo(b.position));
+    return tracksByIds([for (final entry in entries) entry.id]);
+  }
+
+  /// The most popular tracks of an artist. Empty if Jamendo returns none.
+  Future<List<Track>> artistTracks(String artistId, {required int limit}) async {
+    try {
+      final results = await _get('tracks', {
+        'artist_id': artistId,
+        'order': 'popularity_total',
+        'limit': '$limit',
+        'imagesize': _imageSize,
+      });
+      return _parse(results, Track.fromJson);
+    } on JamendoException catch (e) {
+      if (e.failure == JamendoFailure.empty) return [];
+      rethrow;
+    }
+  }
+
   /// One track by id, or null if Jamendo doesn't return it.
   Future<Track?> trackById(String id) async {
     try {

@@ -45,6 +45,13 @@ class AppTheme {
         labelLarge: AppTextStyles.pBold,
       ).apply(bodyColor: AppColors.textLight, displayColor: AppColors.textLight),
 
+      // App bars keep the background color while the content scrolls under them, as the screens without one
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppColors.bgDark,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+      ),
+
       // Navigation Bar
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.bgDark,

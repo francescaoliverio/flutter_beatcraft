@@ -9,7 +9,14 @@ enum HeadingStyle { display, h1, h2, h3, h4, h5 }
 /// - Tells screen readers that this text is a heading
 
 class Heading extends StatelessWidget {
-  const Heading(this.text, {super.key, this.style = HeadingStyle.h1, this.uppercase = true, this.color});
+  const Heading(
+    this.text, {
+    super.key,
+    this.style = HeadingStyle.h1,
+    this.uppercase = true,
+    this.color,
+    this.textAlign,
+  });
 
   final String text;
   final HeadingStyle style;
@@ -19,6 +26,9 @@ class Heading extends StatelessWidget {
 
   /// Optional: overrides the default text color from the theme.
   final Color? color;
+
+  /// Optional: e.g. centered, so a long title stays centered also on its next lines.
+  final TextAlign? textAlign;
 
   TextStyle get _textStyle {
     switch (style) {
@@ -60,7 +70,11 @@ class Heading extends StatelessWidget {
     // (TalkBack, VoiceOver) can jump from heading to heading.
     return Semantics(
       headingLevel: _level,
-      child: Text(uppercase ? text.toUpperCase() : text, style: _textStyle.copyWith(color: color)),
+      child: Text(
+        uppercase ? text.toUpperCase() : text,
+        style: _textStyle.copyWith(color: color),
+        textAlign: textAlign,
+      ),
     );
   }
 }
