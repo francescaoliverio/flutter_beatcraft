@@ -316,6 +316,7 @@ void main() {
       clips: const [
         TimelineClip(id: 7, sourceStart: Duration.zero, sourceEnd: Duration(seconds: 10), timelineStart: Duration.zero),
       ],
+      cover: 4,
       updatedAt: DateTime.utc(2026, 11, 25),
     );
 
@@ -346,7 +347,7 @@ void main() {
       editorEngine.finish(trackJson()['audio'] as String);
 
       final EditorState editor = (await loaded)!;
-      expect((editor.name, editor.projectId, editor.hasUnsavedChanges), ('Saved remix', '42', false));
+      expect((editor.name, editor.projectId, editor.cover, editor.hasUnsavedChanges), ('Saved remix', '42', 4, false));
       expect(editor.clips.single.id, 7);
       expect(editor.track.id, '2353774');
 
@@ -401,6 +402,40 @@ void main() {
       expect(storage.remixProjects[1]!.single.clips, hasLength(1));
       // The editor still has two clips, so it is no longer saved
       expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+    });
+
+    test('a second remix of the same track gets the first free number', () async {
+      await openEditor();
+      await container.read(editorProvider.notifier).save();
+
+      expect((await openEditor()).name, 'Track 1 remix 2');
+      await container.read(editorProvider.notifier).save();
+
+      expect((await openEditor()).name, 'Track 1 remix 3');
+    });
+
+    test('a name used by another remix of the user is not saved', () async {
+      await openEditor();
+      await container.read(editorProvider.notifier).save();
+      await openEditor();
+      // As if a rename had skipped the dialog check
+      final EditorNotifier editor = container.read(editorProvider.notifier)..rename(' TRACK 1 remix');
+
+      expect(await editor.save(), isNull);
+      expect(storage.remixProjects[1], hasLength(1));
+    });
+
+    test('the cover is saved, and changing it makes the remix unsaved', () async {
+      final EditorState opened = await openEditor();
+      expect(opened.cover, inInclusiveRange(1, RemixProject.coverCount));
+      final EditorNotifier editor = container.read(editorProvider.notifier);
+      await editor.save();
+
+      final int other = opened.cover % RemixProject.coverCount + 1;
+      editor.setCover(other);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+      await editor.save();
+      expect(storage.remixProjects[1]!.single.cover, other);
     });
 
     test('a project whose track can no longer be remixed does not open', () async {

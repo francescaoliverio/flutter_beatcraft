@@ -76,6 +76,7 @@ class EditorState {
     required this.waveform,
     required this.clips,
     required this.name,
+    required this.cover,
     this.projectId,
     this.hasUnsavedChanges = false,
     this.selectedClipId,
@@ -95,6 +96,9 @@ class EditorState {
   final List<TimelineClip> clips;
 
   final String name;
+
+  /// Cover number, from 1 to [RemixProject.coverCount].
+  final int cover;
 
   /// Null until the remix is saved for the first time.
   final String? projectId;
@@ -134,6 +138,7 @@ class EditorState {
   EditorState copyWith({
     List<TimelineClip>? clips,
     String? name,
+    int? cover,
     String? projectId,
     bool? hasUnsavedChanges,
     int? selectedClipId,
@@ -149,6 +154,7 @@ class EditorState {
       waveform: waveform,
       clips: clips ?? this.clips,
       name: name ?? this.name,
+      cover: cover ?? this.cover,
       projectId: projectId ?? this.projectId,
       hasUnsavedChanges: hasUnsavedChanges ?? this.hasUnsavedChanges,
       selectedClipId: clearSelection ? null : (selectedClipId ?? this.selectedClipId),
@@ -211,6 +217,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
         waveform: waveform,
         clips: project.clips,
         name: project.name,
+        cover: project.cover,
         projectId: project.id,
       );
     }
@@ -222,7 +229,8 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
       clips: [
         TimelineClip(id: _nextClipId++, sourceStart: Duration.zero, sourceEnd: length, timelineStart: Duration.zero),
       ],
-      name: '${track.name} remix',
+      name: await _freeName('${track.name} remix'),
+      cover: Random().nextInt(RemixProject.coverCount) + 1,
       hasUnsavedChanges: true,
     );
   }
@@ -243,6 +251,17 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   // Project
 
+  /// [name], or [name] followed by the first free number, so the user's remixes never share a name.
+  Future<String> _freeName(String name) async {
+    final List<RemixProject> projects = await ref.read(remixProjectsProvider.future);
+    String candidate = name;
+    for (int number = 2; isRemixNameTaken(projects, candidate); number++) {
+      candidate = '$name $number';
+    }
+    return candidate;
+  }
+
+  /// Ignored if [name] is empty: the rename dialog checks it, and that no other remix of the user has it.
   void rename(String name) {
     final EditorState? editor = state.value;
     final String trimmed = name.trim();
@@ -250,14 +269,21 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     state = AsyncData(editor.copyWith(name: trimmed, hasUnsavedChanges: true));
   }
 
+  void setCover(int cover) {
+    final EditorState? editor = state.value;
+    if (editor == null || cover == editor.cover) return;
+    state = AsyncData(editor.copyWith(cover: cover, hasUnsavedChanges: true));
+  }
+
   /// Saves the remix as a project: the first time it gets an id, then it is updated in place.
-  /// Returns what an undo of this save needs, null if nothing was open.
+  /// Returns what an undo of this save needs, null if nothing was open or another remix has its name.
   Future<SavedRemix?> save() async {
     final EditorState? editor = state.value;
     if (editor == null) return null;
     final String projectId = editor.projectId ?? DateTime.now().microsecondsSinceEpoch.toString();
     final List<RemixProject> projects =
         ref.read(remixProjectsProvider).value ?? await ref.read(remixProjectsProvider.future);
+    if (isRemixNameTaken(projects, editor.name, exceptId: projectId)) return null;
     final RemixProject? previous = projects.where((p) => p.id == projectId).firstOrNull;
     await ref
         .read(remixProjectsProvider.notifier)
@@ -267,6 +293,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
             name: editor.name,
             trackId: editor.track.id,
             clips: editor.clips,
+            cover: editor.cover,
             updatedAt: DateTime.now(),
           ),
         );
@@ -293,6 +320,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   bool _matches(RemixProject project, EditorState editor) =>
       project.name == editor.name &&
+      project.cover == editor.cover &&
       project.trackId == editor.track.id &&
       jsonEncode(project.clips) == jsonEncode(editor.clips);
 

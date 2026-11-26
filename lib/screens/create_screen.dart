@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../models/remix_project.dart';
 import '../models/timeline_clip.dart';
 import '../providers/editor_provider.dart';
 import '../providers/remix_provider.dart';
@@ -25,11 +26,19 @@ String _formatTime(Duration time) {
   return '${time.inMinutes}:$seconds.${time.inMilliseconds % 1000 ~/ 100}';
 }
 
+/// Border of the dialogs, the same as the snackbars and empty states.
+const ShapeBorder _dialogShape = RoundedRectangleBorder(
+  side: BorderSide(color: AppColors.greyDark),
+  borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+);
+
 /// Asks for a new remix name. Pops the name, or null if cancelled.
+/// An empty name, or one already used by another remix of the user ([isTaken]), shows an error instead.
 class _RenameDialog extends StatefulWidget {
-  const _RenameDialog({required this.current});
+  const _RenameDialog({required this.current, required this.isTaken});
 
   final String current;
+  final bool Function(String name) isTaken;
 
   @override
   State<_RenameDialog> createState() => _RenameDialogState();
@@ -37,6 +46,19 @@ class _RenameDialog extends StatefulWidget {
 
 class _RenameDialogState extends State<_RenameDialog> {
   late final TextEditingController _controller = TextEditingController(text: widget.current);
+  String? _error;
+
+  void _submit() {
+    final String name = _controller.text.trim();
+    final String? error = name.isEmpty
+        ? 'Enter a name.'
+        : (widget.isTaken(name) ? 'You already have a remix with this name.' : null);
+    if (error == null) {
+      Navigator.of(context).pop(name);
+    } else {
+      setState(() => _error = error);
+    }
+  }
 
   @override
   void dispose() {
@@ -48,18 +70,19 @@ class _RenameDialogState extends State<_RenameDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.bgDark,
-      shape: const RoundedRectangleBorder(
-        side: BorderSide(color: AppColors.greyDark),
-        borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
-      ),
+      shape: _dialogShape,
       title: const Heading('Rename remix', style: HeadingStyle.h4, uppercase: false),
       content: TextField(
         controller: _controller,
         autofocus: true,
         maxLength: 40,
         textInputAction: TextInputAction.done,
-        decoration: const InputDecoration(labelText: 'Name'),
-        onSubmitted: (value) => Navigator.of(context).pop(value),
+        // errorText is also announced by screen readers
+        decoration: InputDecoration(labelText: 'Name', errorText: _error),
+        onChanged: (_) {
+          if (_error != null) setState(() => _error = null);
+        },
+        onSubmitted: (_) => _submit(),
       ),
       actions: [
         Button(
@@ -68,7 +91,99 @@ class _RenameDialogState extends State<_RenameDialog> {
           variant: ButtonVariant.outline,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        Button(label: 'Rename', onPressed: () => Navigator.of(context).pop(_controller.text)),
+        Button(label: 'Rename', onPressed: _submit),
+      ],
+    );
+  }
+}
+
+/// Size of the cover next to the remix name.
+const double _coverSize = 48;
+
+/// The remix cover: one of the covers in the assets, decoded at the displayed [size] (the files are 1024 px).
+class _Cover extends StatelessWidget {
+  const _Cover({required this.number, required this.size});
+
+  final int number;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+      child: Image.asset(
+        RemixProject.coverAssetOf(number),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+      ),
+    );
+  }
+}
+
+/// Grid of the remix covers. Pops the chosen number, or null if cancelled.
+class _CoverDialog extends StatelessWidget {
+  const _CoverDialog({required this.current});
+
+  final int current;
+
+  static const int _columns = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.bgDark,
+      shape: _dialogShape,
+      title: const Heading('Choose a cover', style: HeadingStyle.h4, uppercase: false),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Rounded down, so rounding never pushes the third cover to a new row
+            final double size = ((constraints.maxWidth - AppSpacing.paddingSm * (_columns - 1)) / _columns)
+                .floorToDouble();
+            return SingleChildScrollView(
+              child: Wrap(
+                spacing: AppSpacing.paddingSm,
+                runSpacing: AppSpacing.paddingSm,
+                children: [
+                  for (int number = 1; number <= RemixProject.coverCount; number++)
+                    Semantics(
+                      button: true,
+                      selected: number == current,
+                      label: 'Cover $number',
+                      excludeSemantics: true,
+                      onTap: () => Navigator.of(context).pop(number),
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context).pop(number),
+                        child: Container(
+                          // The chosen cover has a tertiary border, the others a transparent one of the same width
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: number == current ? AppColors.tertiary : Colors.transparent,
+                              width: 3,
+                            ),
+                            borderRadius: const BorderRadius.all(Radius.circular(AppSpacing.radiusMd)),
+                          ),
+                          child: _Cover(number: number, size: size - 12),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        Button(
+          label: 'Cancel',
+          color: ButtonColor.tertiary,
+          variant: ButtonVariant.outline,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ],
     );
   }
@@ -88,12 +203,24 @@ class CreateScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _rename(BuildContext context, WidgetRef ref, String current) async {
+  Future<void> _rename(BuildContext context, WidgetRef ref, EditorState editor) async {
     final String? name = await showDialog<String>(
       context: context,
-      builder: (_) => _RenameDialog(current: current),
+      builder: (_) => _RenameDialog(
+        current: editor.name,
+        isTaken: (name) =>
+            isRemixNameTaken(ref.read(remixProjectsProvider).value ?? [], name, exceptId: editor.projectId),
+      ),
     );
     if (name != null) ref.read(editorProvider.notifier).rename(name);
+  }
+
+  Future<void> _chooseCover(BuildContext context, WidgetRef ref, int current) async {
+    final int? cover = await showDialog<int>(
+      context: context,
+      builder: (_) => _CoverDialog(current: current),
+    );
+    if (cover != null) ref.read(editorProvider.notifier).setCover(cover);
   }
 
   @override
@@ -101,7 +228,11 @@ class CreateScreen extends ConsumerWidget {
     final AsyncValue<EditorState?> editor = ref.watch(editorProvider);
     // While another remix loads, the previous one is not shown
     final EditorState? loaded = editor.isLoading || editor.hasError ? null : editor.value;
-    final bool canSave = loaded != null && loaded.hasUnsavedChanges;
+    // Another remix may have taken the name meanwhile, e.g. brought back by an Undo
+    final bool nameTaken =
+        loaded != null &&
+        isRemixNameTaken(ref.watch(remixProjectsProvider).value ?? [], loaded.name, exceptId: loaded.projectId);
+    final bool canSave = loaded != null && loaded.hasUnsavedChanges && !nameTaken;
 
     return Scaffold(
       body: SafeArea(
@@ -125,15 +256,31 @@ class CreateScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.paddingMd),
               if (loaded != null) ...[
                 Row(
+                  spacing: AppSpacing.paddingMd,
                   children: [
+                    Semantics(
+                      button: true,
+                      label: 'Cover ${loaded.cover}, change cover',
+                      excludeSemantics: true,
+                      onTap: () => _chooseCover(context, ref, loaded.cover),
+                      child: GestureDetector(
+                        onTap: () => _chooseCover(context, ref, loaded.cover),
+                        child: _Cover(number: loaded.cover, size: _coverSize),
+                      ),
+                    ),
                     Flexible(child: Heading(loaded.name, style: HeadingStyle.h4, uppercase: false)),
                     IconButton(
                       icon: const Icon(PhosphorIconsRegular.pencilSimple),
                       tooltip: 'Rename remix',
-                      onPressed: () => _rename(context, ref, loaded.name),
+                      onPressed: () => _rename(context, ref, loaded),
                     ),
                   ],
                 ),
+                if (nameTaken)
+                  Text(
+                    'You already have a remix with this name. Rename it to save.',
+                    style: AppTextStyles.p.copyWith(color: AppColors.error),
+                  ),
                 // Credits the original track, as its Creative Commons license requires
                 Text(
                   'From ${loaded.track.name} by ${loaded.track.artistName} · via Jamendo',

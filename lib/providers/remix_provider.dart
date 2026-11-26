@@ -64,6 +64,13 @@ class RemixProjectsNotifier extends AsyncNotifier<List<RemixProject>> {
   }
 }
 
+/// True if another of [projects] (not [exceptId]) is called [name]. Case and outer spaces don't count,
+/// so names that read the same, also to screen readers, are the same name.
+bool isRemixNameTaken(List<RemixProject> projects, String name, {String? exceptId}) {
+  final String wanted = name.trim().toLowerCase();
+  return projects.any((p) => p.id != exceptId && p.name.trim().toLowerCase() == wanted);
+}
+
 final remixProjectsProvider = AsyncNotifierProvider<RemixProjectsNotifier, List<RemixProject>>(
   RemixProjectsNotifier.new,
 );
