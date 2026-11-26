@@ -19,6 +19,7 @@ import '../widgets/button.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
+import '../widgets/jamendo_link.dart';
 import '../widgets/undo_snack_bar.dart';
 
 /// Minutes, seconds and tenths, e.g. 1:08.4.
@@ -282,11 +283,7 @@ class CreateScreen extends ConsumerWidget {
                     'You already have a remix with this name. Rename it to save.',
                     style: AppTextStyles.p.copyWith(color: AppColors.error),
                   ),
-                // Credits the original track, as its Creative Commons license requires
-                Text(
-                  'From ${loaded.track.name} by ${loaded.track.artistName} · via Jamendo',
-                  style: AppTextStyles.p.copyWith(color: AppColors.greyLight),
-                ),
+                TrackCredit(track: loaded.track),
               ],
               const SizedBox(height: AppSpacing.paddingLg),
               // isLoading first: after Retry the value can still hold the previous error while reloading

@@ -17,6 +17,7 @@ Map<String, dynamic> trackJson({
   'image': 'https://usercontent.jamendo.com?type=album&id=651054&width=300&trackid=2353774',
   'audio': 'https://prod-1.storage.jamendo.com/?trackid=2353774&format=mp31',
   'audiodownload_allowed': downloadAllowed,
+  'shareurl': 'https://www.jamendo.com/track/2353774',
 };
 
 void main() {
@@ -29,6 +30,11 @@ void main() {
       expect(track.artistName, 'Megis');
       expect(track.image, startsWith('https://usercontent.jamendo.com'));
       expect(track.audio, startsWith('https://prod-1.storage.jamendo.com'));
+      expect(track.shareUrl, 'https://www.jamendo.com/track/2353774');
+    });
+
+    test('a track without shareurl has no page to link', () {
+      expect(Track.fromJson(trackJson()..remove('shareurl')).shareUrl, isNull);
     });
 
     test('can be remixed with downloads allowed and a license without -nd', () {

@@ -14,6 +14,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/button.dart';
 import '../widgets/error_box.dart';
 import '../widgets/heading.dart';
+import '../widgets/jamendo_link.dart';
 
 /// Minutes and seconds, e.g. 3:08.
 String _formatTime(Duration time) {
@@ -105,12 +106,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         Expanded(
                           child: Button(
                             label: 'Share',
+                            // Says where the button goes: it opens the track page, where Jamendo offers sharing
+                            semanticLabel: 'Share, opens the track page on Jamendo',
                             icon: PhosphorIconsRegular.export,
                             color: ButtonColor.tertiary,
                             variant: ButtonVariant.outline,
                             layout: ButtonLayout.vertical,
-                            // TODO: share the track
-                            onPressed: () {},
+                            onPressed: track.shareUrl == null ? null : () => openOnJamendo(context, ref, track),
                           ),
                         ),
                         Expanded(
