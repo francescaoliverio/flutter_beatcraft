@@ -1,0 +1,10 @@
+# Native launch screen, generated with: dart run flutter_native_splash:create
+# The symbol (4x pixel density) centered on AppColors.bgDark, the same color as the first app screen.
+flutter_native_splash:
+  color: "#0E0E0E"
+  image: assets/brand/icon-foreground.png
+  # Android 12+: without an image the launcher icon is used, cropped to a circle
+  android_12:
+    color: "#0E0E0E"
+    icon_background_color: "#0E0E0E"
+  android_min_sdk: 24

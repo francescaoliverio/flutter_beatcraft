@@ -1,0 +1,15 @@
+# App icon, generated with: dart run flutter_launcher_icons
+# Sources in assets/brand (not bundled in the app). Background: AppColors.bgDark.
+# After generating, check ios/Runner.xcodeproj/project.pbxproj: version 0.14.4 sets
+# ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS to AppIcon, put it back to YES.
+flutter_launcher_icons:
+  image_path: assets/brand/icon.png
+  android: true
+  ios: true
+  # iOS icons can't be transparent: any alpha is filled with the background
+  remove_alpha_ios: true
+  background_color_ios: "#0E0E0E"
+  # Android adaptive icon: the system crops the foreground to its own shape
+  adaptive_icon_background: "#0E0E0E"
+  adaptive_icon_foreground: assets/brand/icon-foreground.png
+  min_sdk_android: 24
