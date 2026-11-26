@@ -117,6 +117,13 @@ class EditorState {
   Duration get length =>
       clips.fold(Duration.zero, (Duration end, TimelineClip clip) => clip.timelineEnd > end ? clip.timelineEnd : end);
 
+  /// End of the content: the longer of track and remix.
+  Duration get contentLength => length > trackLength ? length : trackLength;
+
+  /// The whole timeline: the content plus a quarter of the track of free space, to drag clips into
+  /// and to move the playhead to (e.g. to paste there). The playhead can't go further.
+  Duration get timelineLength => contentLength + trackLength * 0.25;
+
   TimelineClip? get selectedClip => clips.where((clip) => clip.id == selectedClipId).firstOrNull;
 
   /// True if Close gaps would move something: a gap, an overlap or a first clip not at 0.
@@ -347,11 +354,17 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   void toggle() => state.value?.isPlaying ?? false ? pause() : play();
 
-  /// Moves the playhead. While playing, the timeline continues from there.
+  /// Moves the playhead. While playing, the timeline continues from there, or stops if it is after the last clip.
   void seek(Duration position) {
     final EditorState? editor = state.value;
     if (editor == null) return;
     final Duration clamped = _clamp(position, editor);
+    if (editor.isPlaying && clamped >= editor.length) {
+      _stopTicker();
+      _engine.stopTimeline();
+      state = AsyncData(editor.copyWith(isPlaying: false, position: clamped));
+      return;
+    }
     if (editor.isPlaying) _engine.playTimeline(editor.clips, clamped);
     state = AsyncData(editor.copyWith(position: clamped));
   }
@@ -497,7 +510,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   Duration _clamp(Duration position, EditorState editor) {
     if (position < Duration.zero) return Duration.zero;
-    return position > editor.length ? editor.length : position;
+    return position > editor.timelineLength ? editor.timelineLength : position;
   }
 
   void _onTick() {

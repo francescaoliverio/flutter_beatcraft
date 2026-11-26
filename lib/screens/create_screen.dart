@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -347,15 +348,21 @@ class _Editor extends ConsumerWidget {
                 style: AppTextStyles.pBold.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
               ),
             ),
-            IconButton(
-              icon: const Icon(PhosphorIconsRegular.arrowUUpLeft),
-              tooltip: 'Undo',
-              onPressed: editor.canUndo ? controls.undo : null,
-            ),
-            IconButton(
-              icon: const Icon(PhosphorIconsRegular.arrowUUpRight),
-              tooltip: 'Redo',
-              onPressed: editor.canRedo ? controls.redo : null,
+            // Side by side without the row spacing, like the zoom buttons
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(PhosphorIconsRegular.arrowUUpLeft),
+                  tooltip: 'Undo',
+                  onPressed: editor.canUndo ? controls.undo : null,
+                ),
+                IconButton(
+                  icon: const Icon(PhosphorIconsRegular.arrowUUpRight),
+                  tooltip: 'Redo',
+                  onPressed: editor.canRedo ? controls.redo : null,
+                ),
+              ],
             ),
           ],
         ),
@@ -397,7 +404,7 @@ class _Editor extends ConsumerWidget {
           editor.clips.isEmpty
               ? 'No clips left. Undo to bring them back.'
               : 'Tap a clip to select it, drag it to move it. Dropped on another clip, it is inserted there. '
-                    'Pinch to zoom, two fingers to scroll.',
+                    'Drag on the ruler to move the playhead. Pinch to zoom, then scroll with the bar or two fingers.',
           style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight),
         ),
       ],
@@ -431,8 +438,8 @@ class _Tool extends StatelessWidget {
 
 /// Ruler, clips with their waveform and the playhead.
 /// Tap: moves the playhead and selects the clip under the finger.
-/// Drag a clip: moves it. Drag elsewhere, on the ruler or near the playhead: moves the playhead.
-/// Two fingers: pinch to zoom, move together to scroll.
+/// Drag a clip: moves it. Drag on the ruler or where there is no clip: moves the playhead.
+/// Two fingers: pinch to zoom, move together to scroll. When zoomed, the bar below also scrolls.
 class _Timeline extends StatefulWidget {
   const _Timeline({required this.editor, required this.controls});
 
@@ -444,14 +451,28 @@ class _Timeline extends StatefulWidget {
 }
 
 class _TimelineState extends State<_Timeline> {
+  /// Room above the ruler for the playhead head: with the ruler, a touch area of 44 px to move the playhead.
+  static const double _headHeight = 20;
   static const double _rulerHeight = 24;
+  static const double _topHeight = _headHeight + _rulerHeight;
   static const double _laneHeight = 120;
 
   /// Distance in px within which a dragged clip snaps to 0, the playhead or the edges of other clips.
   static const double _snapDistance = 12;
 
-  /// Distance in px from the playhead line within which a drag moves the playhead, also over a clip.
-  static const double _playheadGrab = 20;
+  /// Height of the scroll bar: its touch area, and the visible bar in the middle.
+  static const double _scrollBarHeight = 44;
+  static const double _scrollBarThickness = 8;
+
+  /// Shortest scroll thumb, so it stays easy to grab when zoomed in a lot.
+  static const double _minThumbWidth = 44;
+
+  /// Distance in px from the left or right edge where a dragged playhead scrolls the view.
+  static const double _edgeZone = 32;
+
+  /// How often, and by which part of the visible time, the view scrolls while the playhead is held at an edge.
+  static const Duration _edgeTick = Duration(milliseconds: 16);
+  static const double _edgeStep = 0.02;
 
   /// Closest zoom: this much time across the whole width.
   static const Duration _minSpan = Duration(seconds: 1);
@@ -487,12 +508,24 @@ class _TimelineState extends State<_Timeline> {
   /// True from the second finger down until every finger is up: one-finger gestures are ignored meanwhile.
   bool _pinched = false;
 
+  /// True while the scroll thumb is dragged, for its pressed color.
+  bool _scrolling = false;
+
+  /// Scrolls the view while the dragged playhead is held at an edge; [_dragX] is where the finger is.
+  Timer? _edgeTimer;
+  double _dragX = 0;
+
   EditorState get _editor => widget.editor;
 
-  /// The whole timeline: the longer of track and remix, plus a quarter of the track of free space to drag into.
-  Duration get _viewLength {
-    final Duration longest = _editor.length > _editor.trackLength ? _editor.length : _editor.trackLength;
-    return longest + _editor.trackLength * 0.25;
+  /// The whole timeline, shown when not zoomed.
+  Duration get _viewLength => _editor.timelineLength;
+
+  /// Where scrolling stops: the end of the content, or a bit after the playhead when it is in the free space,
+  /// so the view can follow it there (also while it is dragged against the right edge).
+  Duration get _scrollEnd {
+    final Duration afterPlayhead = _editor.position + Duration(milliseconds: (_edgeZone * 2 / _pxPerMs).round());
+    final Duration end = afterPlayhead > _editor.contentLength ? afterPlayhead : _editor.contentLength;
+    return end > _viewLength ? _viewLength : end;
   }
 
   Duration get _visible {
@@ -506,8 +539,11 @@ class _TimelineState extends State<_Timeline> {
 
   double _xOf(Duration time) => (time - _offset).inMilliseconds * _pxPerMs;
 
+  /// Latest left edge: [_scrollEnd] on the right edge.
+  Duration get _maxOffset => _scrollEnd - _visible;
+
   Duration _clampOffset(Duration offset) {
-    final Duration maxOffset = _viewLength - _visible;
+    final Duration maxOffset = _maxOffset;
     if (offset < Duration.zero || maxOffset <= Duration.zero) return Duration.zero;
     return offset > maxOffset ? maxOffset : offset;
   }
@@ -556,7 +592,7 @@ class _TimelineState extends State<_Timeline> {
   String _playheadValue(Duration position) {
     final Duration clamped = position < Duration.zero
         ? Duration.zero
-        : (position > _editor.length ? _editor.length : position);
+        : (position > _editor.timelineLength ? _editor.timelineLength : position);
     return '${_formatTime(clamped)} of ${_formatTime(_editor.length)}';
   }
 
@@ -616,15 +652,15 @@ class _TimelineState extends State<_Timeline> {
   void _onTapUp(TapUpDetails details) {
     if (_pinched) return;
     final Duration time = _timeAt(details.localPosition.dx);
-    if (details.localPosition.dy > _rulerHeight) widget.controls.select(_clipAt(time)?.id);
+    if (details.localPosition.dy > _topHeight) widget.controls.select(_clipAt(time)?.id);
     widget.controls.seek(time);
   }
 
   void _onDragStart(DragStartDetails details) {
     if (_pinched) return;
     final Offset point = details.localPosition;
-    final bool onPlayhead = (point.dx - _xOf(_editor.position)).abs() <= _playheadGrab;
-    if (point.dy <= _rulerHeight || onPlayhead) return;
+    // On the ruler and above it the drag moves the playhead (see _onDragUpdate)
+    if (point.dy <= _topHeight) return;
     final Duration time = _timeAt(point.dx);
     final TimelineClip? clip = _clipAt(time);
     if (clip == null) return;
@@ -640,7 +676,9 @@ class _TimelineState extends State<_Timeline> {
     if (_pinched) return;
     final int? clipId = _dragClipId;
     if (clipId == null) {
-      widget.controls.seek(_timeAt(details.localPosition.dx));
+      _dragX = details.localPosition.dx;
+      widget.controls.seek(_timeAt(_dragX));
+      _updateEdgeScroll();
       return;
     }
     final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == clipId);
@@ -650,7 +688,38 @@ class _TimelineState extends State<_Timeline> {
     setState(() => _dragStart = _snap(clip, inside));
   }
 
+  /// Starts scrolling while the dragged playhead is at an edge, stops when it leaves it.
+  void _updateEdgeScroll() {
+    final int direction = _dragX >= _width - _edgeZone ? 1 : (_dragX <= _edgeZone ? -1 : 0);
+    if (direction == 0 || _span == null) {
+      _stopEdgeScroll();
+      return;
+    }
+    _edgeTimer ??= Timer.periodic(_edgeTick, (_) {
+      // The edge may have changed meanwhile: read it again at every tick
+      final int now = _dragX >= _width - _edgeZone ? 1 : (_dragX <= _edgeZone ? -1 : 0);
+      if (now == 0 || _pinched) {
+        _stopEdgeScroll();
+        return;
+      }
+      setState(() => _offset = _clampOffset(_offset + _visible * (_edgeStep * now)));
+      widget.controls.seek(_timeAt(_dragX));
+    });
+  }
+
+  void _stopEdgeScroll() {
+    _edgeTimer?.cancel();
+    _edgeTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopEdgeScroll();
+    super.dispose();
+  }
+
   void _onDragEnd() {
+    _stopEdgeScroll();
     final int? clipId = _dragClipId;
     if (clipId == null) return;
     if (!_pinched) widget.controls.move(clipId, _dragStart);
@@ -684,33 +753,118 @@ class _TimelineState extends State<_Timeline> {
     return best;
   }
 
+  // Scroll bar
+
+  /// Thumb as wide as the visible part of the content, at least [_minThumbWidth].
+  double _thumbWidth(double barWidth) =>
+      min(barWidth, max(_minThumbWidth, barWidth * _visible.inMilliseconds / max(1, _scrollEnd.inMilliseconds)));
+
+  /// Room the thumb can move in.
+  double _thumbTravel(double barWidth) => max(1, barWidth - _thumbWidth(barWidth));
+
+  double _thumbLeft(double barWidth) =>
+      _maxOffset <= Duration.zero ? 0 : _thumbTravel(barWidth) * _offset.inMilliseconds / _maxOffset.inMilliseconds;
+
+  /// Scrolls so the thumb starts at [left].
+  void _scrollThumbTo(double left, double barWidth) {
+    if (_maxOffset <= Duration.zero) return;
+    final double fraction = (left / _thumbTravel(barWidth)).clamp(0, 1);
+    setState(() => _offset = _clampOffset(Duration(milliseconds: (_maxOffset.inMilliseconds * fraction).round())));
+  }
+
+  /// Scrolls by half a screen, for screen readers.
+  void _scrollBy(int direction) => setState(() => _offset = _clampOffset(_offset + _visible * (0.5 * direction)));
+
+  String _shownRange(Duration offset) {
+    final Duration from = _clampOffset(offset);
+    final Duration to = from + _visible > _scrollEnd ? _scrollEnd : from + _visible;
+    return 'Showing ${_formatTime(from)} to ${_formatTime(to)}';
+  }
+
+  Widget _scrollBar(double barWidth) {
+    final double thumbWidth = _thumbWidth(barWidth);
+    final double thumbLeft = _thumbLeft(barWidth);
+    return Semantics(
+      label: 'Timeline scroll',
+      value: _shownRange(_offset),
+      increasedValue: _shownRange(_offset + _visible * 0.5),
+      decreasedValue: _shownRange(_offset - _visible * 0.5),
+      onIncrease: () => _scrollBy(1),
+      onDecrease: () => _scrollBy(-1),
+      child: GestureDetector(
+        excludeFromSemantics: true,
+        behavior: HitTestBehavior.opaque,
+        // A tap on the bar centres the thumb there
+        onTapUp: (details) => _scrollThumbTo(details.localPosition.dx - thumbWidth / 2, barWidth),
+        onHorizontalDragStart: (_) => setState(() => _scrolling = true),
+        onHorizontalDragUpdate: (details) => _scrollThumbTo(_thumbLeft(barWidth) + details.delta.dx, barWidth),
+        onHorizontalDragEnd: (_) => setState(() => _scrolling = false),
+        onHorizontalDragCancel: () => setState(() => _scrolling = false),
+        child: SizedBox(
+          height: _scrollBarHeight,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: _scrollBarThickness,
+                decoration: const BoxDecoration(
+                  color: AppColors.greyDarker,
+                  borderRadius: BorderRadius.all(Radius.circular(AppSpacing.radiusPill)),
+                ),
+              ),
+              Positioned(
+                left: thumbLeft,
+                width: thumbWidth,
+                child: Container(
+                  height: _scrollBarThickness,
+                  decoration: BoxDecoration(
+                    color: _scrolling ? AppColors.greyLighter : AppColors.greyLight,
+                    borderRadius: const BorderRadius.all(Radius.circular(AppSpacing.radiusPill)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Scroll bar (only when zoomed) and zoom buttons on one row, under the timeline.
+  Widget _scrollAndZoom() {
+    return Row(
+      children: [
+        Expanded(
+          child: _span == null
+              ? const SizedBox(height: _scrollBarHeight)
+              : LayoutBuilder(builder: (context, constraints) => _scrollBar(constraints.maxWidth)),
+        ),
+        IconButton(
+          icon: const Icon(PhosphorIconsRegular.magnifyingGlassMinus),
+          tooltip: 'Zoom out',
+          onPressed: _canZoomOut ? () => _zoomButton(1 / _zoomStep) : null,
+        ),
+        IconButton(
+          icon: const Icon(PhosphorIconsRegular.magnifyingGlassPlus),
+          tooltip: 'Zoom in',
+          onPressed: _canZoomIn ? () => _zoomButton(_zoomStep) : null,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            IconButton(
-              icon: const Icon(PhosphorIconsRegular.magnifyingGlassMinus),
-              tooltip: 'Zoom out',
-              onPressed: _canZoomOut ? () => _zoomButton(1 / _zoomStep) : null,
-            ),
-            IconButton(
-              icon: const Icon(PhosphorIconsRegular.magnifyingGlassPlus),
-              tooltip: 'Zoom in',
-              onPressed: _canZoomIn ? () => _zoomButton(_zoomStep) : null,
-            ),
-          ],
-        ),
         LayoutBuilder(
           builder: (context, constraints) {
             _width = max(1, constraints.maxWidth);
             // The timeline may have become shorter since the last build
             _offset = _clampOffset(_offset);
 
-            return Semantics(
+            final Widget timeline = Semantics(
               container: true,
               label: 'Timeline, playhead',
               value: _playheadValue(_editor.position),
@@ -733,7 +887,7 @@ class _TimelineState extends State<_Timeline> {
                   onHorizontalDragEnd: (_) => _onDragEnd(),
                   onHorizontalDragCancel: _onDragEnd,
                   child: CustomPaint(
-                    size: Size(_width, _rulerHeight + _laneHeight),
+                    size: Size(_width, _topHeight + _laneHeight),
                     painter: _TimelinePainter(
                       clips: _shownClips,
                       selectedClipId: _editor.selectedClipId,
@@ -742,7 +896,8 @@ class _TimelineState extends State<_Timeline> {
                       pxPerMs: _pxPerMs,
                       offset: _offset,
                       position: _editor.position,
-                      rulerHeight: _rulerHeight,
+                      headHeight: _headHeight,
+                      rulerHeight: _topHeight,
                       insertAt: _insertAt,
                       onSelect: widget.controls.select,
                       onNudge: (clip, step) => widget.controls.nudge(clip.id, step),
@@ -752,8 +907,10 @@ class _TimelineState extends State<_Timeline> {
                 ),
               ),
             );
+            return timeline;
           },
         ),
+        _scrollAndZoom(),
       ],
     );
   }
@@ -768,6 +925,7 @@ class _TimelinePainter extends CustomPainter {
     required this.pxPerMs,
     required this.offset,
     required this.position,
+    required this.headHeight,
     required this.rulerHeight,
     required this.insertAt,
     required this.onSelect,
@@ -788,6 +946,11 @@ class _TimelinePainter extends CustomPainter {
   final Duration offset;
 
   final Duration position;
+
+  /// Room at the top for the playhead head, above the ruler labels.
+  final double headHeight;
+
+  /// Bottom of the ruler, where the clips start.
   final double rulerHeight;
 
   /// Insertion point of the clip being dragged, marked with a line.
@@ -878,7 +1041,7 @@ class _TimelinePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      if (x + 2 + label.width <= size.width) label.paint(canvas, Offset(x + 2, 0));
+      if (x + 2 + label.width <= size.width) label.paint(canvas, Offset(x + 2, headHeight));
     }
   }
 
@@ -925,12 +1088,13 @@ class _TimelinePainter extends CustomPainter {
     final Paint paint = Paint()
       ..color = AppColors.primary
       ..strokeWidth = 2;
-    canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    canvas.drawLine(Offset(x, headHeight), Offset(x, size.height), paint);
+    // Head in the room above the ruler, so it doesn't cover the labels
     canvas.drawPath(
       Path()
-        ..moveTo(x - 6, 0)
-        ..lineTo(x + 6, 0)
-        ..lineTo(x, 8)
+        ..moveTo(x - 8, headHeight - 14)
+        ..lineTo(x + 8, headHeight - 14)
+        ..lineTo(x, headHeight)
         ..close(),
       paint,
     );

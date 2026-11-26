@@ -83,6 +83,30 @@ void main() {
     expect(container.read(playbackProvider).isPlaying, isFalse);
   });
 
+  test('the playhead goes into the free space after the content, not past it', () async {
+    final EditorState opened = await openEditor();
+    final EditorNotifier editor = container.read(editorProvider.notifier);
+    // 3 min track: a quarter of it, 45 s, of free space after the end
+    expect(opened.timelineLength, const Duration(minutes: 3, seconds: 45));
+
+    editor.seek(const Duration(minutes: 3, seconds: 20));
+    expect(container.read(editorProvider).value!.position, const Duration(minutes: 3, seconds: 20));
+
+    editor.seek(const Duration(minutes: 10));
+    expect(container.read(editorProvider).value!.position, const Duration(minutes: 3, seconds: 45));
+  });
+
+  test('a seek after the last clip while playing stops the timeline there', () async {
+    await openEditor();
+    final EditorNotifier editor = container.read(editorProvider.notifier)..play();
+
+    editor.seek(const Duration(minutes: 3, seconds: 20));
+
+    final EditorState state = container.read(editorProvider).value!;
+    expect((state.isPlaying, state.position), (false, const Duration(minutes: 3, seconds: 20)));
+    expect(editorEngine.timelineClips, isNull);
+  });
+
   test('the player starting pauses the timeline', () async {
     await openEditor();
     container.read(editorProvider.notifier).play();
