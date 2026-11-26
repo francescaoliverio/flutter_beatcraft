@@ -100,6 +100,8 @@ class _ButtonState extends State<Button> {
     final Color contentColor = filled ? AppColors.textDark : color;
 
     return Semantics(
+      // Its own element for screen readers, never merged with the text next to it
+      container: true,
       button: true,
       enabled: _enabled,
       label: widget.semanticLabel ?? widget.label,

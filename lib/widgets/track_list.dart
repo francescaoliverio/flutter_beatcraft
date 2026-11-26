@@ -82,15 +82,11 @@ class TrackListScreen extends ConsumerWidget {
                 Expanded(
                   child: Text(trackListSummary(loaded), style: AppTextStyles.p.copyWith(color: AppColors.greyLight)),
                 ),
-                // Its own element for screen readers, not merged with the count next to it
-                Semantics(
-                  container: true,
-                  child: Button(
-                    label: 'Play',
-                    semanticLabel: 'Play all',
-                    icon: PhosphorIconsRegular.play,
-                    onPressed: () => _play(context, ref, loaded.first, loaded),
-                  ),
+                Button(
+                  label: 'Play',
+                  semanticLabel: 'Play all',
+                  icon: PhosphorIconsRegular.play,
+                  onPressed: () => _play(context, ref, loaded.first, loaded),
                 ),
               ],
             ),
