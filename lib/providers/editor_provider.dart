@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -188,6 +189,11 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     ref.listen(playbackProvider.select((p) => p.isPlaying), (_, bool playing) {
       if (playing) pause();
     });
+    // The open remix deleted from the profile (or brought back with Undo) changes its saved state
+    ref.listen(remixProjectsProvider, (_, AsyncValue<List<RemixProject>> projects) {
+      final List<RemixProject>? saved = projects.value;
+      if (saved != null) _onProjectsChanged(saved);
+    });
 
     final Track track = request.track ?? await _projectTrack(project!);
     final Duration length = await _engine.load(track.audio);
@@ -264,6 +270,24 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
       current.copyWith(projectId: projectId, hasUnsavedChanges: !identical(current.clips, editor.clips)),
     );
   }
+
+  /// Unsaved once its project is deleted, saved again if it comes back with the same content.
+  void _onProjectsChanged(List<RemixProject> projects) {
+    final EditorState? editor = state.value;
+    final String? projectId = editor?.projectId;
+    if (editor == null || projectId == null) return;
+    final RemixProject? project = projects.where((p) => p.id == projectId).firstOrNull;
+    if (project == null && !editor.hasUnsavedChanges) {
+      state = AsyncData(editor.copyWith(hasUnsavedChanges: true));
+    } else if (project != null && editor.hasUnsavedChanges && _matches(project, editor)) {
+      state = AsyncData(editor.copyWith(hasUnsavedChanges: false));
+    }
+  }
+
+  bool _matches(RemixProject project, EditorState editor) =>
+      project.name == editor.name &&
+      project.trackId == editor.track.id &&
+      jsonEncode(project.clips) == jsonEncode(editor.clips);
 
   // Playback
 

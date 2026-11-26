@@ -357,6 +357,29 @@ void main() {
       expect(container.read(editorProvider).value!.clips.last.id, 8);
     });
 
+    test('deleting the open remix makes it unsaved, Undo makes it saved again', () async {
+      await openEditor();
+      final EditorNotifier editor = container.read(editorProvider.notifier);
+      await editor.save();
+      final RemixProject saved = storage.remixProjects[1]!.single;
+      final RemixProjectsNotifier projects = container.read(remixProjectsProvider.notifier);
+
+      await projects.delete(saved.id);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+
+      // Undo in the profile saves the same project back
+      await projects.save(saved);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isFalse);
+
+      // Edited after the delete, it stays unsaved when the old version comes back
+      await projects.delete(saved.id);
+      editor
+        ..seek(const Duration(seconds: 60))
+        ..split();
+      await projects.save(saved);
+      expect(container.read(editorProvider).value!.hasUnsavedChanges, isTrue);
+    });
+
     test('a project whose track can no longer be remixed does not open', () async {
       jamendoReturns(trackJson(license: 'http://creativecommons.org/licenses/by-nd/3.0/'));
       container.read(remixProvider.notifier).open(savedProject());

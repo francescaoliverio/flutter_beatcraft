@@ -151,12 +151,19 @@ class _RemixRow extends ConsumerWidget {
   void _delete(BuildContext context, WidgetRef ref) {
     final RemixProjectsNotifier projects = ref.read(remixProjectsProvider.notifier);
     projects.delete(remix.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${remix.name} deleted'),
-        action: SnackBarAction(label: 'Undo', onPressed: () => projects.save(remix)),
-      ),
-    );
+    // Replaces the snackbar of a previous delete instead of queueing behind it
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${remix.name} deleted'),
+          action: SnackBarAction(label: 'Undo', onPressed: () => projects.save(remix)),
+          // With an action Flutter keeps the snackbar until it is tapped. It stays only for screen reader users,
+          // who need time to reach Undo; the close icon dismisses it in both cases.
+          persist: MediaQuery.accessibleNavigationOf(context),
+          showCloseIcon: true,
+        ),
+      );
   }
 
   @override
