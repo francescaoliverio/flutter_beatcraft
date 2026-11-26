@@ -298,7 +298,7 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     return candidate;
   }
 
-  /// Ignored if [name] is empty: the rename dialog checks it, and that no other remix of the user has it.
+  /// Ignored if [name] is empty: the edit dialog in Create checks it, and that no other remix of the user has it.
   void rename(String name) {
     final EditorState? editor = state.value;
     final String trimmed = name.trim();
