@@ -25,7 +25,7 @@ class MiniPlayer extends ConsumerWidget {
     final bool isPlaying = status == PlaybackStatus.playing;
     final bool isLoading = status == PlaybackStatus.loading;
 
-    void openPlayer() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+    void openPlayer() => showPlayer(context);
 
     return ColoredBox(
       color: AppColors.greyDarker,

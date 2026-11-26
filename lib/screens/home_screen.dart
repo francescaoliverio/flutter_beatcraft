@@ -21,7 +21,7 @@ class HomeScreen extends ConsumerWidget {
 
   void _openTrack(BuildContext context, WidgetRef ref, Track track) {
     ref.read(playbackProvider.notifier).playTrack(track);
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+    showPlayer(context);
   }
 
   @override
