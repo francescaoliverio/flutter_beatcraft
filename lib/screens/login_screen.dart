@@ -65,52 +65,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.paddingLg),
-          // AutofillGroup lets password managers fill both fields together
-          child: AutofillGroup(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Heading('BeatCraft', style: HeadingStyle.display),
-                const SizedBox(height: AppSpacing.paddingLg),
-                TextField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(labelText: 'Username'),
-                  autofillHints: const [AutofillHints.username],
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: AppSpacing.paddingMd),
-                TextField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    suffixIcon: IconButton(
-                      // tooltip is also the screen reader label
-                      tooltip: _passwordVisible ? 'Hide password' : 'Show password',
-                      icon: Icon(_passwordVisible ? PhosphorIconsRegular.eyeSlash : PhosphorIconsRegular.eye),
-                      onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-                    ),
+        // Centered when it fits; scrolls with large text or the keyboard open instead of overflowing
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.paddingLg),
+            // AutofillGroup lets password managers fill both fields together
+            child: AutofillGroup(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Heading('BeatCraft', style: HeadingStyle.display),
+                  const SizedBox(height: AppSpacing.paddingLg),
+                  TextField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(labelText: 'Username'),
+                    autofillHints: const [AutofillHints.username],
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.next,
                   ),
-                  obscureText: !_passwordVisible,
-                  autofillHints: const [AutofillHints.password],
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _login(),
-                ),
-                if (_error != null) ...[
                   const SizedBox(height: AppSpacing.paddingMd),
-                  // liveRegion: screen readers announce the error when it appears
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(_error!, style: AppTextStyles.p.copyWith(color: AppColors.error)),
+                  TextField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      suffixIcon: IconButton(
+                        // tooltip is also the screen reader label
+                        tooltip: _passwordVisible ? 'Hide password' : 'Show password',
+                        icon: Icon(_passwordVisible ? PhosphorIconsRegular.eyeSlash : PhosphorIconsRegular.eye),
+                        onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                      ),
+                    ),
+                    obscureText: !_passwordVisible,
+                    autofillHints: const [AutofillHints.password],
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _login(),
                   ),
+                  if (_error != null) ...[
+                    const SizedBox(height: AppSpacing.paddingMd),
+                    // liveRegion: screen readers announce the error when it appears
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(_error!, style: AppTextStyles.p.copyWith(color: AppColors.error)),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.paddingLg),
+                  Button(label: 'Log in', icon: PhosphorIconsRegular.signIn, onPressed: _loading ? null : _login),
                 ],
-                const SizedBox(height: AppSpacing.paddingLg),
-                Button(label: 'Log in', icon: PhosphorIconsRegular.signIn, onPressed: _loading ? null : _login),
-              ],
+              ),
             ),
           ),
         ),
