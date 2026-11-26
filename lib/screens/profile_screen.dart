@@ -27,8 +27,9 @@ class ProfileScreen extends ConsumerWidget {
 
   static const EdgeInsets _sideMargin = EdgeInsets.symmetric(horizontal: AppSpacing.paddingLg);
 
+  /// Plays [track] with the favorites as the queue, and opens the player.
   void _openTrack(BuildContext context, WidgetRef ref, Track track) {
-    ref.read(playbackProvider.notifier).playTrack(track);
+    ref.read(playbackProvider.notifier).playTrack(track, queue: ref.read(favoriteTracksProvider).value);
     showPlayer(context);
   }
 

@@ -79,8 +79,11 @@ class FakeAudioEngine implements AudioEngine {
   @override
   Duration get position => seekedTo;
 
+  /// Set by a test to make the loaded track end.
+  bool ended = false;
+
   @override
-  bool get hasEnded => false;
+  bool get hasEnded => ended;
 
   @override
   Future<Float32List> waveform(int points) async => Float32List(points);
@@ -135,6 +138,83 @@ void main() {
   });
 
   group('playbackProvider', () {
+    group('queue', () {
+      final List<Track> queue = [track('1'), track('2'), track('3')];
+
+      /// Plays track [id] of [queue] and finishes its load.
+      Future<void> playFromQueue(String id) async {
+        final Future<void> playing = container
+            .read(playbackProvider.notifier)
+            .playTrack(queue.firstWhere((t) => t.id == id), queue: queue);
+        engine.finish('https://example.com/$id.mp3');
+        await playing;
+      }
+
+      /// Runs [move] and finishes the load of track [id] it starts.
+      Future<void> moveTo(Future<void> Function(PlaybackNotifier controls) move, String id) async {
+        final Future<void> moving = move(container.read(playbackProvider.notifier));
+        await Future<void>.delayed(Duration.zero);
+        engine.finish('https://example.com/$id.mp3');
+        await moving;
+      }
+
+      test('next goes through the queue and starts again from the first after the last', () async {
+        await playFromQueue('2');
+        expect((container.read(playbackProvider).queueIndex, container.read(playbackProvider).hasQueue), (1, true));
+
+        await moveTo((controls) => controls.next(), '3');
+        expect(container.read(currentTrackProvider).value?.id, '3');
+
+        await moveTo((controls) => controls.next(), '1');
+        expect(container.read(playbackProvider).trackId, '1');
+        expect(container.read(playbackProvider).status, PlaybackStatus.playing);
+      });
+
+      test('previous goes back, from the first to the last', () async {
+        await playFromQueue('2');
+
+        await moveTo((controls) => controls.previous(), '1');
+        expect(container.read(playbackProvider).trackId, '1');
+
+        await moveTo((controls) => controls.previous(), '3');
+        expect(container.read(playbackProvider).trackId, '3');
+      });
+
+      test('after 3 seconds previous starts the track again', () async {
+        await playFromQueue('2');
+        container.read(playbackProvider.notifier).seek(const Duration(seconds: 10));
+
+        await container.read(playbackProvider.notifier).previous();
+
+        expect(container.read(playbackProvider).trackId, '2');
+        expect(engine.seekedTo, Duration.zero);
+      });
+
+      test('the next track starts when one ends', () async {
+        await playFromQueue('3');
+
+        engine.ended = true;
+        // The position is checked every 200 ms
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        engine.ended = false;
+        engine.finish('https://example.com/1.mp3');
+        await Future<void>.delayed(Duration.zero);
+
+        expect(container.read(playbackProvider).trackId, '1');
+        expect(container.read(playbackProvider).status, PlaybackStatus.playing);
+      });
+
+      test('a track played without a list has no queue to move through', () async {
+        final Future<void> playing = container.read(playbackProvider.notifier).playTrack(track('1'));
+        engine.finish('https://example.com/1.mp3');
+        await playing;
+
+        expect(container.read(playbackProvider).hasQueue, isFalse);
+        await container.read(playbackProvider.notifier).next();
+        expect(container.read(playbackProvider).trackId, '1');
+      });
+    });
+
     test('playTrack selects the track, loads it and plays it', () async {
       final Future<void> playing = container.read(playbackProvider.notifier).playTrack(track('1'));
 

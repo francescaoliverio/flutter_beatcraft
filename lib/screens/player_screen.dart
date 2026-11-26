@@ -226,7 +226,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         IconButton(
                           icon: const Icon(PhosphorIconsRegular.skipBack),
                           tooltip: 'Previous',
-                          onPressed: () {},
+                          // Also without a queue: it starts the track again
+                          onPressed: playback.hasQueue || (isThisTrack && playback.isReady) ? controls.previous : null,
                         ),
                         Button(
                           icon: status == PlaybackStatus.playing
@@ -242,7 +243,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         IconButton(
                           icon: const Icon(PhosphorIconsRegular.skipForward),
                           tooltip: 'Next',
-                          onPressed: () {},
+                          onPressed: playback.hasQueue ? controls.next : null,
                         ),
                       ],
                     ),

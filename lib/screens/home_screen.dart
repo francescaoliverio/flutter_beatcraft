@@ -19,8 +19,9 @@ import 'player_screen.dart';
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  void _openTrack(BuildContext context, WidgetRef ref, Track track) {
-    ref.read(playbackProvider.notifier).playTrack(track);
+  /// Plays [track] with the row it is in as the queue, and opens the player.
+  void _openTrack(BuildContext context, WidgetRef ref, Track track, List<Track>? row) {
+    ref.read(playbackProvider.notifier).playTrack(track, queue: row);
     showPlayer(context);
   }
 
@@ -44,7 +45,7 @@ class HomeScreen extends ConsumerWidget {
               fallbackImage: AssetImage(track.fallbackCoverAsset),
               title: track.name,
               subtitle: track.artistName,
-              onTap: () => _openTrack(context, ref, track),
+              onTap: () => _openTrack(context, ref, track, ref.read(newReleasesProvider).value),
             ),
             errorBuilder: (error) => _ErrorForSection(
               error: error,
@@ -61,7 +62,7 @@ class HomeScreen extends ConsumerWidget {
               fallbackImage: AssetImage(track.fallbackCoverAsset),
               title: track.name,
               subtitle: track.artistName,
-              onTap: () => _openTrack(context, ref, track),
+              onTap: () => _openTrack(context, ref, track, ref.read(readyToRemixProvider).value),
             ),
             errorBuilder: (error) => _ErrorForSection(
               error: error,
