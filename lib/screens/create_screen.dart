@@ -382,9 +382,16 @@ class _Editor extends ConsumerWidget {
                 onPressed: editor.clipToSplit == null ? null : controls.split,
               ),
               _Tool(
-                label: 'Duplicate',
+                label: 'Copy',
+                semanticLabel: 'Copy clip',
                 icon: PhosphorIconsRegular.copy,
-                onPressed: hasSelection ? controls.duplicateSelected : null,
+                onPressed: hasSelection ? controls.copySelected : null,
+              ),
+              _Tool(
+                label: 'Paste',
+                semanticLabel: 'Paste at playhead',
+                icon: PhosphorIconsRegular.clipboard,
+                onPressed: editor.canPaste ? controls.paste : null,
               ),
               _Tool(
                 label: 'Delete',
@@ -403,7 +410,8 @@ class _Editor extends ConsumerWidget {
         Text(
           editor.clips.isEmpty
               ? 'No clips left. Undo to bring them back.'
-              : 'Tap a clip to select it, drag it to move it. Dropped on another clip, it is inserted there. '
+              : 'Tap a clip to select it, drag it to move it. Dropped or pasted on another clip, '
+                    'it goes before or after it. Paste puts the copied clip at the playhead. '
                     'Drag on the ruler to move the playhead. Pinch to zoom, then scroll with the bar or two fingers.',
           style: AppTextStyles.pSm.copyWith(color: AppColors.greyLight),
         ),
@@ -511,7 +519,7 @@ class _TimelineState extends State<_Timeline> {
   /// True while the scroll thumb is dragged, for its pressed color.
   bool _scrolling = false;
 
-  /// Scrolls the view while the dragged playhead is held at an edge; [_dragX] is where the finger is.
+  /// Scrolls the view while the dragged playhead or clip is held at an edge; [_dragX] is where the finger is.
   Timer? _edgeTimer;
   double _dragX = 0;
 
@@ -520,11 +528,17 @@ class _TimelineState extends State<_Timeline> {
   /// The whole timeline, shown when not zoomed.
   Duration get _viewLength => _editor.timelineLength;
 
-  /// Where scrolling stops: the end of the content, or a bit after the playhead when it is in the free space,
-  /// so the view can follow it there (also while it is dragged against the right edge).
+  /// Where scrolling stops: the end of the content, or a bit after the playhead or the dragged clip when they are
+  /// in the free space, so the view can follow them there (also while dragged against the right edge).
   Duration get _scrollEnd {
-    final Duration afterPlayhead = _editor.position + Duration(milliseconds: (_edgeZone * 2 / _pxPerMs).round());
-    final Duration end = afterPlayhead > _editor.contentLength ? afterPlayhead : _editor.contentLength;
+    Duration reach = _editor.position;
+    final int? clipId = _dragClipId;
+    if (clipId != null) {
+      final Duration clipEnd = _dragStart + _editor.clips.firstWhere((c) => c.id == clipId).length;
+      if (clipEnd > reach) reach = clipEnd;
+    }
+    final Duration margin = Duration(milliseconds: (_edgeZone * 2 / _pxPerMs).round());
+    final Duration end = reach + margin > _editor.contentLength ? reach + margin : _editor.contentLength;
     return end > _viewLength ? _viewLength : end;
   }
 
@@ -585,7 +599,8 @@ class _TimelineState extends State<_Timeline> {
     final int? clipId = _dragClipId;
     if (clipId == null) return null;
     final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == clipId);
-    return insertionPoint(_editor.clips.where((c) => c.id != clipId).toList(), _dragStart, clip.length);
+    final Placement placed = placeClip(_editor.clips.where((c) => c.id != clipId).toList(), _dragStart, clip.length);
+    return placed.moved ? placed.start : null;
   }
 
   /// Playhead value read by screen readers, kept between 0 and the end like a seek does.
@@ -681,14 +696,21 @@ class _TimelineState extends State<_Timeline> {
       _updateEdgeScroll();
       return;
     }
+    _dragX = details.localPosition.dx;
+    _dragClipTo(clipId);
+    _updateEdgeScroll();
+  }
+
+  /// Moves the preview of the dragged clip under the finger, inside the timeline and snapped to nearby edges.
+  void _dragClipTo(int clipId) {
     final TimelineClip clip = _editor.clips.firstWhere((c) => c.id == clipId);
-    final Duration wanted = _timeAt(details.localPosition.dx) - _grabOffset;
+    final Duration wanted = _timeAt(_dragX) - _grabOffset;
     final Duration maxStart = _viewLength - clip.length;
     final Duration inside = wanted < Duration.zero ? Duration.zero : (wanted > maxStart ? maxStart : wanted);
     setState(() => _dragStart = _snap(clip, inside));
   }
 
-  /// Starts scrolling while the dragged playhead is at an edge, stops when it leaves it.
+  /// Starts scrolling while the dragged playhead or clip is at an edge, stops when it leaves it.
   void _updateEdgeScroll() {
     final int direction = _dragX >= _width - _edgeZone ? 1 : (_dragX <= _edgeZone ? -1 : 0);
     if (direction == 0 || _span == null) {
@@ -703,7 +725,12 @@ class _TimelineState extends State<_Timeline> {
         return;
       }
       setState(() => _offset = _clampOffset(_offset + _visible * (_edgeStep * now)));
-      widget.controls.seek(_timeAt(_dragX));
+      final int? clipId = _dragClipId;
+      if (clipId != null) {
+        _dragClipTo(clipId);
+      } else {
+        widget.controls.seek(_timeAt(_dragX));
+      }
     });
   }
 

@@ -238,19 +238,110 @@ void main() {
       expect(current().canUndo, isFalse);
     });
 
-    test('duplicate puts a copy at the end, delete removes the selection', () {
+    test('paste puts a copy of the copied clip at the playhead, delete removes the selection', () {
       editor
-        ..select(current().clips.single.id)
-        ..duplicateSelected();
+        ..seek(s(60))
+        ..split();
+      final TimelineClip right = current().clips.last;
+      editor
+        ..select(right.id)
+        ..copySelected();
+      // Copying is not an edit
+      expect(current().canPaste, isTrue);
 
-      expect(current().clips, hasLength(2));
-      expect(current().clips.last.timelineStart, s(180));
-      expect(current().length, s(360));
+      // In the free space after the content: the copy goes exactly there
+      editor
+        ..seek(s(200))
+        ..paste();
+
+      final TimelineClip copy = current().clips.last;
+      expect((copy.sourceStart, copy.sourceEnd, copy.timelineStart), (s(60), s(180), s(200)));
+      expect(copy.id, isNot(right.id));
+      expect(current().selectedClipId, copy.id);
 
       editor.deleteSelected();
 
-      expect(current().clips, hasLength(1));
+      expect(current().clips, hasLength(2));
       expect(current().selectedClipId, isNull);
+    });
+
+    test('pasted on a clip, the copy goes before or after it and the following clips move to make room', () {
+      // A 0-60, B 60-180
+      editor
+        ..seek(s(60))
+        ..split();
+      final [TimelineClip a, TimelineClip b] = current().clips;
+      editor
+        ..select(a.id)
+        ..copySelected()
+        // 100 is in the first half of B: the copy goes at 60 and B moves right by 60
+        ..seek(s(100))
+        ..paste();
+
+      TimelineClip byId(int id) => current().clips.firstWhere((clip) => clip.id == id);
+      expect(current().clips.last.timelineStart, s(60));
+      expect(byId(b.id).timelineStart, s(120));
+      expect(current().hasGaps, isFalse);
+    });
+
+    test('a clip that only reaches the next ones pushes them just enough, keeping their gaps', () {
+      // A 0-20, then B 30-50 and C 60-180 with gaps, built by splitting and moving
+      editor
+        ..seek(s(20))
+        ..split()
+        ..seek(s(40))
+        ..split();
+      final [TimelineClip a, TimelineClip b, TimelineClip c] = current().clips;
+      editor
+        ..move(c.id, s(60))
+        ..move(b.id, s(30));
+      TimelineClip byId(int id) => current().clips.firstWhere((clip) => clip.id == id);
+      expect((byId(b.id).timelineStart, byId(c.id).timelineStart), (s(30), s(60)));
+
+      // A copy of A (20 s) pasted at 25, in the gap: it would cover B by 15 s, so B and C move right by 15
+      editor
+        ..select(a.id)
+        ..copySelected()
+        ..seek(s(25))
+        ..paste();
+
+      expect(current().clips.last.timelineStart, s(25));
+      expect(byId(b.id).timelineStart, s(45));
+      expect(byId(c.id).timelineStart, s(75));
+
+      // A copy pasted where it covers nothing moves nothing
+      editor
+        ..seek(s(200))
+        ..paste();
+      expect(byId(c.id).timelineStart, s(75));
+    });
+
+    test('a dragged clip that only reaches the next one pushes it just enough', () {
+      // A 0-60, B 60-180, then A moved away to 200: B 60-180 is alone
+      editor
+        ..seek(s(60))
+        ..split();
+      final [TimelineClip a, TimelineClip b] = current().clips;
+      editor.move(a.id, s(200));
+
+      // A (60 s) dropped at 10, in the free space before B: it would cover B by 10 s
+      editor.move(a.id, s(10));
+
+      TimelineClip byId(int id) => current().clips.firstWhere((clip) => clip.id == id);
+      expect(byId(a.id).timelineStart, s(10));
+      expect(byId(b.id).timelineStart, s(70));
+    });
+
+    test('a copied clip is not kept for another remix', () async {
+      editor
+        ..select(current().clips.single.id)
+        ..copySelected();
+
+      await openEditor();
+
+      expect(current().canPaste, isFalse);
+      container.read(editorProvider.notifier).paste();
+      expect(current().clips, hasLength(1));
     });
 
     test('undo and redo walk through the edits', () {

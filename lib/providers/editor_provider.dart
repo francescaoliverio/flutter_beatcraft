@@ -39,14 +39,32 @@ const Duration _tick = Duration(milliseconds: 50);
 /// Shortest clip a split can leave on either side.
 const Duration minClipLength = Duration(milliseconds: 100);
 
-/// Where a clip of [length] dropped at [start] is inserted, or null if it fits there without covering [others].
-/// Dropped over a clip, it goes before it (first half) or after it (second half); otherwise it goes at [start].
-Duration? insertionPoint(List<TimelineClip> others, Duration start, Duration length) {
-  final Duration end = start + length;
-  if (!others.any((c) => c.timelineStart < end && c.timelineEnd > start)) return null;
+/// A clip placed among others: where it starts, and the others after moving to make room.
+typedef Placement = ({Duration start, List<TimelineClip> others, bool moved});
+
+/// Places a clip of [length] at [start] among [others] (dropped or pasted).
+/// Over a clip it goes right before it (first half of that clip) or right after it (second half), otherwise at
+/// [start]. The clips from there on move right only as much as needed not to be covered, all by the same amount,
+/// so the gaps between them stay. [Placement.moved] is true if anything moved or the start changed.
+Placement placeClip(List<TimelineClip> others, Duration start, Duration length) {
   final TimelineClip? under = others.where((c) => c.timelineStart < start && c.timelineEnd > start).lastOrNull;
-  if (under == null) return start;
-  return start < under.timelineStart + under.length ~/ 2 ? under.timelineStart : under.timelineEnd;
+  final Duration at = under == null
+      ? start
+      : (start < under.timelineStart + under.length ~/ 2 ? under.timelineStart : under.timelineEnd);
+  final Iterable<TimelineClip> following = others.where((c) => c.timelineStart >= at);
+  final Duration? next = following.isEmpty
+      ? null
+      : following.map((c) => c.timelineStart).reduce((a, b) => a < b ? a : b);
+  final Duration overlap = next == null ? Duration.zero : at + length - next;
+  if (overlap <= Duration.zero) return (start: at, others: others, moved: at != start);
+  return (
+    start: at,
+    others: [
+      for (final TimelineClip c in others)
+        c.timelineStart >= at ? c.copyWith(timelineStart: c.timelineStart + overlap) : c,
+    ],
+    moved: true,
+  );
 }
 
 /// [clips] one after the other from 0, in timeline order (list order for equal starts). Drawing order is kept.
@@ -82,6 +100,7 @@ class EditorState {
     this.selectedClipId,
     this.canUndo = false,
     this.canRedo = false,
+    this.canPaste = false,
     this.isPlaying = false,
     this.position = Duration.zero,
   });
@@ -108,6 +127,10 @@ class EditorState {
   final int? selectedClipId;
   final bool canUndo;
   final bool canRedo;
+
+  /// True once a clip was copied.
+  final bool canPaste;
+
   final bool isPlaying;
 
   /// Playhead position on the timeline.
@@ -152,6 +175,7 @@ class EditorState {
     bool clearSelection = false,
     bool? canUndo,
     bool? canRedo,
+    bool? canPaste,
     bool? isPlaying,
     Duration? position,
   }) {
@@ -167,6 +191,7 @@ class EditorState {
       selectedClipId: clearSelection ? null : (selectedClipId ?? this.selectedClipId),
       canUndo: canUndo ?? this.canUndo,
       canRedo: canRedo ?? this.canRedo,
+      canPaste: canPaste ?? this.canPaste,
       isPlaying: isPlaying ?? this.isPlaying,
       position: position ?? this.position,
     );
@@ -184,6 +209,9 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
 
   int _nextClipId = 0;
 
+  /// The copied clip, only its part of the track matters. In memory, for the remix open now.
+  TimelineClip? _clipboard;
+
   AudioEngine get _engine => ref.read(editorEngineProvider);
 
   @override
@@ -198,6 +226,8 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     _undo.clear();
     _redo.clear();
     _nextClipId = 0;
+    // A copied clip is a part of the previous track: it can't be pasted into another remix
+    _clipboard = null;
     if (request == null) return null;
     final RemixProject? project = request.project;
 
@@ -396,13 +426,23 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     ], selectedClipId: right.id);
   }
 
-  /// Copies the selected clip to the end of the timeline and selects the copy.
-  void duplicateSelected() {
+  /// Remembers the selected clip for [paste]. Not an edit: nothing to undo.
+  void copySelected() {
     final EditorState? editor = state.value;
     final TimelineClip? clip = editor?.selectedClip;
     if (editor == null || clip == null) return;
-    final TimelineClip copy = clip.copyWith(id: _nextClipId++, timelineStart: editor.length);
-    _edit(editor, [...editor.clips, copy], selectedClipId: copy.id);
+    _clipboard = clip;
+    state = AsyncData(editor.copyWith(canPaste: true));
+  }
+
+  /// Puts a copy of the copied clip at the playhead (see [placeClip]) and selects it.
+  void paste() {
+    final EditorState? editor = state.value;
+    final TimelineClip? copied = _clipboard;
+    if (editor == null || copied == null) return;
+    final Placement placed = placeClip(editor.clips, editor.position, copied.length);
+    final TimelineClip copy = copied.copyWith(id: _nextClipId++, timelineStart: placed.start);
+    _edit(editor, [...placed.others, copy], selectedClipId: copy.id);
   }
 
   void deleteSelected() {
@@ -412,26 +452,16 @@ class EditorNotifier extends AsyncNotifier<EditorState?> {
     _edit(editor, editor.clips.where((c) => c.id != clip.id).toList(), clearSelection: true);
   }
 
-  /// Drops a clip at [timelineStart] (not before 0) and selects it.
-  /// In a free space it stays there. Over other clips it is inserted (see [insertionPoint])
-  /// and every clip from that point moves right by its length.
+  /// Drops a clip at [timelineStart] (not before 0, see [placeClip]) and selects it.
   void move(int clipId, Duration timelineStart) {
     final EditorState? editor = state.value;
     if (editor == null) return;
     final Duration start = timelineStart < Duration.zero ? Duration.zero : timelineStart;
     final TimelineClip? clip = editor.clips.where((c) => c.id == clipId).firstOrNull;
     if (clip == null || clip.timelineStart == start) return;
-    final List<TimelineClip> others = editor.clips.where((c) => c.id != clipId).toList();
-    final Duration? insertAt = insertionPoint(others, start, clip.length);
+    final Placement placed = placeClip(editor.clips.where((c) => c.id != clipId).toList(), start, clip.length);
     // The moved clip goes last, so it is drawn on top
-    _edit(editor, [
-      for (final TimelineClip c in others)
-        if (insertAt != null && c.timelineStart >= insertAt)
-          c.copyWith(timelineStart: c.timelineStart + clip.length)
-        else
-          c,
-      clip.copyWith(timelineStart: insertAt ?? start),
-    ], selectedClipId: clipId);
+    _edit(editor, [...placed.others, clip.copyWith(timelineStart: placed.start)], selectedClipId: clipId);
   }
 
   /// Moves a clip by [step], stopping against its neighbours instead of pushing them. For screen readers.
