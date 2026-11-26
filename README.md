@@ -77,7 +77,89 @@ A remix is saved as a project, not as an audio file. The project stores:
 
 When a remix is opened, the app loads the original track from Jamendo into memory again and rebuilds the remix from the project. No copy of the track is saved on the device, in line with the Jamendo terms.
 
-> ⚠️ **To be evaluated:** how long it takes to load a track before editing can start.
+## Architecture
+
+### Layers
+
+The code is split in four layers, one folder each (see [Project structure](#project-structure)):
+
+| Layer | Folder | What it does |
+|---|---|---|
+| Models | `models/` | Plain data with `fromJson` and `toJson`: tracks, clips, remix projects, users |
+| Services | `services/` | Everything that talks to the outside: Jamendo, DummyJSON, the audio engine, the device storage, opening links |
+| Providers | `providers/` | State and logic, with Riverpod `Notifier` and `AsyncNotifier` classes (no code generation) |
+| Screens and widgets | `screens/`, `widgets/` | Only the interface: they read the state and call the providers' methods |
+
+Every service is created by a provider, so tests replace it with a fake one (an audio engine without sound, an in-memory storage, a simulated HTTP client) and the logic is tested without a device or a network.
+
+### State
+
+- **Session**: `authProvider` holds the logged user. `loggedUserIdProvider` is watched by the providers of favorites, saved remixes and last track, so they reload by themselves when another user logs in, and show nothing after logout.
+- **Playback**: `playbackProvider` plays the current track and holds the queue. Only the parts of the state a widget uses rebuild it (`select`), so the position updates don't redraw the whole screen.
+- **Editor**: `editorProvider` holds the remix being edited. Every edit creates a new list of clips: undo and redo are two stacks of lists. The insertion rule (`placeClip`) and the clip schedule (`planTimeline`) are pure functions, tested on their own.
+
+### Audio
+
+The audio engine is [flutter_soloud](https://pub.dev/packages/flutter_soloud):
+
+- Tracks are downloaded with `http` and loaded from memory (`loadMem`). `loadUrl` would save a temporary copy of the track, which the Jamendo terms don't allow.
+- They are decoded whole in memory, so moving to any point of the track is exact: the editor does it at the start of every clip.
+- The player and the editor have one engine each, and pause each other.
+
+### Navigation
+
+- The main screen keeps its three tabs (Home, Create, Profile) alive, so they don't reload when you switch back.
+- Home has its own navigator: playlists and artists open inside the tab, under the mini player and the bottom navigation. The Android back button closes them first.
+- The player opens as a full screen sheet that slides up from the bottom and closes with a swipe down.
+
+### Checks and errors
+
+- **Jamendo**: the key is passed at launch, never written in the code. Errors come with HTTP 200, so the outcome is read from `headers.code`. Empty results are retried up to 3 times. An invalid key, no network and an unexpected answer each have their own message instead of a crash. `user_name` (it can contain an email address) and `headers.next` (it contains the key) are never read or shown.
+- **Remix rule**: checked on the Remix button and again when a saved remix is opened, in case its track can no longer be remixed.
+- **Login**: the token stays in memory; a saved user that no longer exists is forgotten at launch.
+- **Your data**: remix names are unique for each user. Closing the name and cover dialog with changes asks whether to apply or discard them. Deleting and saving a remix can be undone.
+- **Playback**: when two tracks are started in a row, the last one wins even if the first finishes loading later.
+
+## Accessibility
+
+The app is designed to work with screen readers (VoiceOver, TalkBack), large text and reduced motion, and its colors meet the WCAG 2.1 AA contrast level.
+
+### Screen readers
+
+- **Headings**: the `Heading` widget tells screen readers the heading level, so they can jump from one section to the next.
+- **Buttons**: every `Button` is its own element, never merged with the text next to it. Where the visible label is short or ambiguous, screen readers hear a clearer one: "Remix not allowed", "Play all", "Paste at playhead", "Share, opens the track page on Jamendo". Icon-only buttons have a tooltip, which is also their label ("Like" or "Remove like", "Show password", "Edit name and cover").
+- **Cards and rows**: a track card, a saved remix and a track in a list are read as one item with all their details (e.g. name, artist, length and "now playing"), and the selected one is announced as selected.
+- **Timeline**: it is drawn by hand, but every part is readable. The timeline reads the playhead position, each clip reads its start and end, and swiping up or down moves the playhead by 5 seconds, or the clip in focus by 1 second, announcing the new value. The scroll bar of the zoomed timeline reads the visible range and scrolls by half a screen.
+- **Links**: the credit in Create and the artist's website are read as links, with what they open.
+- **Messages**: login errors and loading errors are announced as soon as they appear. Field errors (e.g. a name already in use) are read with the field. The Undo message stays on screen while a screen reader is on, so there is time to reach Undo, and it can always be closed.
+- **Images**: decorative images (covers next to their title, the mini player progress) are hidden from screen readers, so they don't repeat what the text already says.
+
+### Touch targets
+
+Touch areas are at least 44 px tall, as Apple recommends: the ruler of the timeline (where the playhead is dragged), the scroll bar and its thumb, the links. Icon buttons use Flutter's default of 48 px.
+
+### Contrast
+
+Text and icon colors, with their contrast ratio (AA asks for at least 4.5:1 for normal text):
+
+| Color | On | Ratio | Used for |
+|---|---|---|---|
+| White | Background `#0E0E0E` | 19.3:1 | Main text |
+| Grey light `#A2A2A2` | Background | 7.6:1 | Secondary text, icons |
+| Primary `#C7F53D` | Background | 15.2:1 | Selected tab, track playing now |
+| Secondary `#C155F6` | Background | 5.4:1 | Progress, waveform |
+| Tertiary `#E142F0` | Background | 5.7:1 | Editor and player buttons |
+| Error `#FF8833` | Background | 8.1:1 | Error messages |
+| Black | Primary / Secondary / Tertiary | 16.6 / 5.9 / 6.2:1 | Text on filled buttons |
+| White | Surface `#2A2A2A` | 14.4:1 | Text in messages and empty states |
+
+White text is used only on the dark background, and text on brand colors is always dark. The two darker greys are used only for borders and surfaces, never for text.
+
+### Motion, feedback and text size
+
+- Pressed elements change color instead of showing a ripple, so the feedback is the same on every control.
+- The loading placeholders stop pulsing when the system asks to reduce motion.
+- Every screen scrolls instead of cutting its content with large text sizes or the keyboard open. The times in the editor and in the track lists use digits of equal width, so they don't jump while they change.
 
 ## Tech stack
 
@@ -136,7 +218,7 @@ Any other user listed at [dummyjson.com/users](https://dummyjson.com/users) work
 ```
 lib/
   main.dart          app entry point
-  app.dart           MaterialApp, theme and routes
+  app.dart           MaterialApp and theme; shows the login or the main screen
   theme/             design tokens from Figma: colors, text styles, spacing, effects
   models/            data classes (tracks, clips, remix projects)
   services/          audio engine, API calls and local storage
@@ -151,7 +233,7 @@ assets/
 
 ## Getting started
 
-Requirements: Flutter SDK, Android Studio for Android, Xcode on macOS for iOS.
+Requirements: Flutter 3.50, Android Studio for Android, Xcode on macOS for iOS.
 
 ```bash
 git clone https://github.com/francescaoliverio/flutter_beatcraft
@@ -203,6 +285,22 @@ While the app runs, the terminal may show lines like this one, especially while 
 - **Where it comes from**: the Flutter engine, not the app code. For every frame the operating system tells Flutter when it will be shown on screen.
 - **What it means**: the system reported a frame time earlier than the one of the previous frame, here by about 1 ms (the numbers are microseconds). Flutter's maintainers explain it in [flutter/flutter#106277](https://github.com/flutter/flutter/issues/106277): the system first asks for a frame in the future, then for one that is earlier.
 - **Why it can be ignored**: the engine handles it by itself, using the time of the previous frame (that is the "clamping"), and goes on. In the same issue the maintainers state that it "is not a crashing bug". Despite the `ERROR` tag, nothing is wrong in the app, and the app can't prevent it.
+
+## Tests
+
+```bash
+flutter analyze
+flutter test
+```
+
+108 tests in 16 files, all running without a device or a network:
+
+| Folder | What they check |
+|---|---|
+| `test/models/` | Reading and writing the JSON of Jamendo, DummyJSON and saved remixes, also with missing fields |
+| `test/services/` | Jamendo and DummyJSON requests and answers, every error case, with a simulated HTTP client; the schedule of the clips on the timeline |
+| `test/providers/` | Login, logout and per-user data; playback and the queue; the editor: split, insertion, copy and paste, undo and redo, saving, unique names, undo of a save |
+| `test/screens/`, `test/widgets/` | The player sheet (status bar, closing), the name and cover dialog, the playlist screen, navigation inside the Home tab, links, screen reader semantics of the buttons |
 
 ## Design
 
