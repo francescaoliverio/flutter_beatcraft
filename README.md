@@ -174,6 +174,7 @@ White text is used only on the dark background, and text on brand colors is alwa
 | Links to Jamendo | [url_launcher](https://pub.dev/packages/url_launcher) |
 | UI components | [material_ui](https://pub.dev/packages/material_ui) |
 | Icons | [phosphoricons_flutter](https://pub.dev/packages/phosphoricons_flutter) |
+| App icon and launch screen | [flutter_launcher_icons](https://pub.dev/packages/flutter_launcher_icons), [flutter_native_splash](https://pub.dev/packages/flutter_native_splash) (development only) |
 | Font | Exo |
 | Design | Figma |
 
@@ -227,6 +228,7 @@ lib/
   widgets/           reusable UI components
 
 assets/
+  brand/             logo sources for the app icon and the launch screen (not bundled in the app)
   images/            playlist and remix covers
   fonts/             Exo font files
 ```
